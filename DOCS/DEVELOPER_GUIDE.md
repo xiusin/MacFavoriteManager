@@ -12,14 +12,14 @@
 - **凹陷效果**：图标容器通常采用 `ZStack` 实现，背景色比卡片稍深，模拟下凹感。
 - **色彩偏好**：
   - 禁用标准纯红/纯蓝。
-  - **Indigo (靛蓝)** 用于主要操作/配置。
-  - **Orange (琥珀色)** 用于警告/删除。
-  - 文本多使用 `.secondary.opacity(0.8)` 以保持高级感。
+  - **Indigo (靛蓝)** 用于主要操作/配置（个性化配置）。
+  - **Orange (琥珀色)** 用于警告/删除（移出收藏夹）。
+  - 文本多使用 `.secondary.opacity(0.8)` 或更小字体（9-12pt）以保持高级感。
 
 ### 2. 紧凑性 (Compactness)
-- 列表项高度需保持精致，图标尺寸标准为 **28x28**，内部图标 **16x16**。
-- 列表项间距标准为 **6px**。
-- 弹出菜单（Popover）宽度固定为 **110-120px**。
+- 列表项高度需保持精致，图标容器标准为 **28x28**，内部图标 **16x16**。
+- 列表项垂直间距标准为 **6px**。
+- 弹出菜单（Popover）宽度固定为 **110-120px**，字体 **10.5pt**。
 
 ### 3. 毛玻璃 (Glassmorphism)
 - 所有的浮层（菜单、对话框、Header）必须使用 `.ultraThinMaterial` 背景。
@@ -28,24 +28,34 @@
 ## ⌨️ 技术架构 (Architecture)
 
 - **环境**：Target macOS 12.0+。
-- **数据流**：严格遵守 MVVM。`AppViewModel` 是唯一的真相来源（Single Source of Truth）。
+- **数据流**：严格遵守 MVVM。`AppViewModel` 是唯一的真相来源。
 - **持久化**：使用 `UserDefaults` 存储 JSON 编码的结构体。
-- **网络逻辑**：`WebMetadataFetcher` 必须伪装 User-Agent，且支持自动处理重定向和相对路径解析。
-- **图标缓存**：网页图标抓取后必须下载到 `Application Support/StatusCmdManager/Icons` 并引用本地路径。
+- **图标缓存**：网页图标抓取后必须下载到 `Application Support/StatusCmdManager/Icons` 并引用本地路径 `file://`。
 
-## 🖱 交互协议 (Interaction Protocol)
+## 🖱 交互协议与手势处理 (Interaction & Gestures)
 
-Agent 在添加新功能或修改现有逻辑时必须遵守以下优先级：
-1. **左键短点击**：执行核心动作（跳转网页、切换开关）。
-2. **鼠标右键**：显示自定义拟物化 Popover 菜单。
-3. **向左侧滑**：显示常用操作托盘（NeumorphicActionButton）。
-4. **长按 (0.5s+)**：触发系统拖拽排序（onDrag）。
+这是本项目最复杂的逻辑点，修改时需极其谨慎：
+
+### 1. 拖拽重排 (Drag & Drop)
+- **实现方式**：在列表项左侧覆盖一个 **30px 宽的透明矩形** (`Color.white.opacity(0.001)`)。
+- **触发点**：`.onDrag` 必须绑定在这个透明感应区上，而不是整个卡片。
+- **稳定性**：这种“专用感应区”方案是解决 `ScrollView` 内部多手势冲突的唯一稳定解。
+
+### 2. 侧滑菜单 (Swipe Actions)
+- **触发**：在非感应区进行横向滑动。
+- **参数**：使用 `simultaneousGesture` 配合 `DragGesture(minimumDistance: 25)`。
+- **判定逻辑**：`abs(width) > abs(height) * 2`（确保横向意图明显时才触发）。
+
+### 3. 右键菜单 (Context Menu)
+- **禁用原生**：严禁使用 `.contextMenu { ... }` 装饰器。
+- **自定义实现**：使用 `RightClickDetector` (NSViewRepresentable) 捕获右键，并弹出基于 `.popover` 的拟物化菜单。
 
 ## ⚠️ 避坑指南
-- **不要使用系统右键菜单**：必须使用自定义的 `RightClickDetector` 覆盖层。
-- **不要使用 `List`**：除非能解决 macOS 12 下的背景和边距污染问题，否则请优先使用 `ScrollView` + `LazyVStack` 手动实现列表。
-- **手势冲突**：`DragGesture` 必须设置 `minimumDistance` (建议 15-20) 且在 `onChanged` 中判断位移方向，以兼容拖拽排序。
+- **不要使用 `List`**：`List` 在 macOS 12 下会强制带入背景色和内边距，且难以定制拟物化间隔。请始终使用 `ScrollView` + `LazyVStack`。
+- **不要使用 `.onLongPressGesture`**：长按会拦截系统的拖拽识别。所有的次要操作必须通过 **右键** 或 **侧滑** 触发。
+- **按钮穿透**：侧滑后的拟物化按钮（`NeumorphicActionButton`）应位于 `ZStack` 顶层，并使用 `onTapGesture` 确保在滑动偏移后依然可点击。
 
 ## 🤖 给 Agent 的操作指令
-当用户要求“增加一个图标”或“修改一个样式”时，请先检查 `Model.swift` 中的 `iconLibrary` 和 `IconMatcher`。
-当用户要求“添加新 Tab”时，请确保新 Tab 的 Header 组件与现有 Tab 共享同样的逻辑。
+- **修改图标**：检查 `Model.swift` 中的 `IconMatcher` 映射逻辑及 `iconLibrary`。
+- **添加组件**：复用 `NeumorphicInputBackground` 和 `NeumorphicTextField` 以保持输入框风格统一。
+- **重构逻辑**：任何涉及列表项手势的修改，必须同时在 `NeumorphicCard` (服务) 和 `BookmarkRow` (书签) 中同步。

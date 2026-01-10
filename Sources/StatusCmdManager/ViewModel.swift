@@ -145,13 +145,17 @@ class AppViewModel: ObservableObject {
     }
     
     func moveCommand(from source: IndexSet, to destination: Int) {
-        commands.move(fromOffsets: source, toOffset: destination)
-        saveCommands()
+        withAnimation {
+            commands.move(fromOffsets: source, toOffset: destination)
+            saveCommands()
+        }
     }
     
     func moveBookmark(from source: IndexSet, to destination: Int) {
-        bookmarks.move(fromOffsets: source, toOffset: destination)
-        saveBookmarks()
+        withAnimation {
+            bookmarks.move(fromOffsets: source, toOffset: destination)
+            saveBookmarks()
+        }
     }
     
     // MARK: - Command Management

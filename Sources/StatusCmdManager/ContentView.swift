@@ -322,17 +322,18 @@ struct BookmarkListView: View {
                 } else {
                     LazyVStack(spacing: 6) {
                         ForEach(viewModel.bookmarks) { item in
-                            BookmarkRow(item: item, onDelete: { onDeleteRequest(item) }, onEdit: { onEditRequest(item) })
-                                .onDrag {
-                                    self.draggedItem = item
-                                    return NSItemProvider(object: item.id.uuidString as NSString)
-                                }
-                                .onDrop(of: [.text], delegate: ReorderableDropDelegate(
-                                    item: item,
-                                    list: viewModel.bookmarks,
-                                    draggedItem: $draggedItem,
-                                    onMove: viewModel.moveBookmark
-                                ))
+                            BookmarkRow(
+                                item: item,
+                                draggedItem: $draggedItem, // 传递绑定
+                                onDelete: { onDeleteRequest(item) },
+                                onEdit: { onEditRequest(item) }
+                            )
+                            .onDrop(of: [.text], delegate: ReorderableDropDelegate(
+                                item: item,
+                                list: viewModel.bookmarks,
+                                draggedItem: $draggedItem,
+                                onMove: viewModel.moveBookmark
+                            ))
                         }
                     }
                     .padding(.horizontal, 16)
@@ -346,6 +347,7 @@ struct BookmarkListView: View {
 
 struct BookmarkRow: View {
     let item: BookmarkItem
+    @Binding var draggedItem: BookmarkItem?
     var onDelete: () -> Void
     var onEdit: () -> Void
     @Environment(\.colorScheme) var colorScheme
@@ -360,7 +362,7 @@ struct BookmarkRow: View {
         ZStack(alignment: .trailing) {
             // 内容层
             HStack(spacing: 10) {
-                // 拖动手势手柄 (视觉暗示)
+                // 视觉手柄
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 10))
                     .foregroundColor(.secondary.opacity(0.3))
@@ -395,6 +397,7 @@ struct BookmarkRow: View {
             )
             .contentShape(Rectangle())
             .offset(x: offset)
+            // 整个区域的点击手势
             .onTapGesture {
                 if isSwiped {
                     withAnimation(.spring()) { offset = 0; isSwiped = false }
@@ -402,16 +405,29 @@ struct BookmarkRow: View {
                     if let url = URL(string: item.url) { NSWorkspace.shared.open(url) }
                 }
             }
+            // 整个区域的右键
             .overlay(
                 RightClickDetector { showMenu = true }
+            )
+            // 左侧 30px 的透明拖拽触发区
+            .overlay(
+                HStack {
+                    Color.white.opacity(0.001)
+                        .frame(width: 30)
+                        .onDrag {
+                            self.draggedItem = item
+                            return NSItemProvider(object: item.id.uuidString as NSString)
+                        }
+                    Spacer()
+                }
             )
             .popover(isPresented: $showMenu, arrowEdge: .bottom) {
                 BookmarkContextMenu(onEdit: onEdit, onDelete: onDelete, showMenu: $showMenu)
             }
-            .simultaneousGesture( // 使用同步手势，让系统 onDrag 有机会触发
-                DragGesture(minimumDistance: 15)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 25) // 增加阈值，防止干扰拖拽排序
                     .onChanged { value in
-                        if abs(value.translation.width) > abs(value.translation.height) * 1.5 {
+                        if abs(value.translation.width) > abs(value.translation.height) * 2 {
                             let translation = value.translation.width
                             if translation < 0 {
                                 offset = isSwiped ? translation - menuWidth : translation
@@ -434,7 +450,7 @@ struct BookmarkRow: View {
                     }
             )
             
-            // 2. 顶层操作按钮 (只有在侧滑时才显示在暴露出的空间)
+            // 操作按钮... (保持不变)
             if offset != 0 || isSwiped {
                 HStack(spacing: 10) {
                     NeumorphicActionButton(icon: "slider.horizontal.3", color: .indigo) {
@@ -814,6 +830,7 @@ struct CommandListView: View {
                     ForEach(viewModel.commands) { cmd in
                         NeumorphicCard(
                             command: cmd,
+                            draggedItem: $draggedItem, // 传递绑定
                             isOn: Binding(
                                 get: { viewModel.commandStates[cmd.id] ?? false },
                                 set: { _ in viewModel.toggle(command: cmd) }
@@ -822,10 +839,6 @@ struct CommandListView: View {
                             onEdit: { onEdit(cmd) },
                             onDelete: { onDeleteRequest(cmd) }
                         )
-                        .onDrag {
-                            self.draggedItem = cmd
-                            return NSItemProvider(object: cmd.id.uuidString as NSString)
-                        }
                         .onDrop(of: [.text], delegate: ReorderableDropDelegate(
                             item: cmd,
                             list: viewModel.commands,
@@ -1090,6 +1103,7 @@ struct RightClickDetector: NSViewRepresentable {
 
 struct NeumorphicCard: View {
     let command: CommandItem
+    @Binding var draggedItem: CommandItem?
     @Binding var isOn: Bool
     var isLoading: Bool
     var onEdit: () -> Void
@@ -1104,25 +1118,9 @@ struct NeumorphicCard: View {
     
     var body: some View {
         ZStack(alignment: .trailing) {
-            // 顶层操作按钮
-            if offset != 0 || isSwiped {
-                HStack(spacing: 10) {
-                    NeumorphicActionButton(icon: "slider.horizontal.3", color: .indigo) {
-                        withAnimation(.spring()) { offset = 0; isSwiped = false }
-                        onEdit()
-                    }
-                    NeumorphicActionButton(icon: "minus.circle.fill", color: .orange) {
-                        withAnimation(.spring()) { offset = 0; isSwiped = false }
-                        onDelete()
-                    }
-                }
-                .padding(.trailing, 10)
-                .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
-
             // 内容层
             HStack(spacing: 10) {
-                // 拖动手势手柄
+                // 视觉手柄
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 10))
                     .foregroundColor(.secondary.opacity(0.3))
@@ -1141,28 +1139,14 @@ struct NeumorphicCard: View {
                 .frame(width: 28, height: 28)
                 
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(command.name)
-                        .font(.system(size: 12, weight: .medium))
-                        .lineLimit(1)
-                        .foregroundColor(.primary)
+                    Text(command.name).font(.system(size: 12, weight: .medium)).lineLimit(1).foregroundColor(.primary)
                     if !command.description.isEmpty {
-                        Text(command.description)
-                            .font(.system(size: 9))
-                            .lineLimit(1)
-                            .foregroundColor(.secondary.opacity(0.8))
+                        Text(command.description).font(.system(size: 9)).lineLimit(1).foregroundColor(.secondary.opacity(0.8))
                     }
                 }
-                
                 Spacer()
-                
-                if isLoading {
-                    ProgressView().scaleEffect(0.5)
-                } else {
-                    Toggle("", isOn: $isOn)
-                        .toggleStyle(SwitchToggleStyle(tint: .blue))
-                        .labelsHidden()
-                        .scaleEffect(0.7)
-                }
+                if isLoading { ProgressView().scaleEffect(0.5) }
+                else { Toggle("", isOn: $isOn).toggleStyle(SwitchToggleStyle(tint: .blue)).labelsHidden().scaleEffect(0.7) }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -1184,13 +1168,25 @@ struct NeumorphicCard: View {
             .overlay(
                 RightClickDetector { showMenu = true }
             )
+            // 30px 拖拽感应区
+            .overlay(
+                HStack {
+                    Color.white.opacity(0.001)
+                        .frame(width: 30)
+                        .onDrag {
+                            self.draggedItem = command
+                            return NSItemProvider(object: command.id.uuidString as NSString)
+                        }
+                    Spacer()
+                }
+            )
             .popover(isPresented: $showMenu, arrowEdge: .bottom) {
                 BookmarkContextMenu(onEdit: onEdit, onDelete: onDelete, showMenu: $showMenu)
             }
             .simultaneousGesture(
-                DragGesture(minimumDistance: 15)
+                DragGesture(minimumDistance: 25)
                     .onChanged { value in
-                        if abs(value.translation.width) > abs(value.translation.height) * 1.5 {
+                        if abs(value.translation.width) > abs(value.translation.height) * 2 {
                             let translation = value.translation.width
                             if translation < 0 {
                                 offset = isSwiped ? translation - menuWidth : translation
@@ -1212,6 +1208,22 @@ struct NeumorphicCard: View {
                         }
                     }
             )
+            
+            // 操作按钮
+            if offset != 0 || isSwiped {
+                HStack(spacing: 10) {
+                    NeumorphicActionButton(icon: "slider.horizontal.3", color: .indigo) {
+                        withAnimation(.spring()) { offset = 0; isSwiped = false }
+                        onEdit()
+                    }
+                    NeumorphicActionButton(icon: "minus.circle.fill", color: .orange) {
+                        withAnimation(.spring()) { offset = 0; isSwiped = false }
+                        onDelete()
+                    }
+                }
+                .padding(.trailing, 10)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
         }
     }
 }
