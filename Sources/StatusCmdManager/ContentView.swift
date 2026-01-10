@@ -806,7 +806,7 @@ struct CommandListView: View {
     
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 6) { // 减小间距，与收藏夹一致
+            LazyVStack(spacing: 6) {
                 if viewModel.commands.isEmpty {
                     EmptyStateView(onAdd: {}).padding(.top, 60)
                 } else {
