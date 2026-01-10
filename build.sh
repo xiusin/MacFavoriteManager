@@ -28,7 +28,7 @@ fi
 echo "复制资源..."
 cp Sources/StatusCmdManager/Info.plist "$CONTENTS_DIR/"
 
-# 签名（本地运行需要 ad-hoc 签名）
+# 签名应用（本地运行建议使用标准 ad-hoc 签名）
 echo "签名应用..."
 codesign --force --deep --sign - "$APP_BUNDLE"
 

@@ -24,43 +24,60 @@ class AppViewModel: ObservableObject {
         loadCommands()
         loadBookmarks()
         self.isBookmarkGridView = UserDefaults.standard.object(forKey: viewModeKey) as? Bool ?? true
+        setupCloudSync()
+    }
+    
+    // MARK: - iCloud Sync logic
+    private func setupCloudSync() {
+        // 监听其他设备同步过来的变更
+        NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: NSUbiquitousKeyValueStore.default,
+            queue: .main
+        ) { [weak self] _ in
+            self?.loadFromCloud()
+        }
+        
+        // 强制从 iCloud 拉取最新
+        NSUbiquitousKeyValueStore.default.synchronize()
+    }
+    
+    private func loadFromCloud() {
+        print("iCloud Data Changed, updating...")
+        loadCommands()
+        loadBookmarks()
     }
     
     func saveViewMode() {
         UserDefaults.standard.set(isBookmarkGridView, forKey: viewModeKey)
+        NSUbiquitousKeyValueStore.default.set(isBookmarkGridView, forKey: viewModeKey)
+        NSUbiquitousKeyValueStore.default.synchronize()
     }
     
     // MARK: - Persistence
     func loadCommands() {
-        if let data = UserDefaults.standard.data(forKey: storageKey),
+        // 优先从 iCloud 读取，如果没有则回退到本地
+        let cloudData = NSUbiquitousKeyValueStore.default.data(forKey: storageKey)
+        let localData = UserDefaults.standard.data(forKey: storageKey)
+        
+        if let data = cloudData ?? localData,
            let decoded = try? JSONDecoder().decode([CommandItem].self, from: data) {
             self.commands = decoded
         } else {
-            // 默认初始数据
+            // 默认初始数据...
             self.commands = [
-                CommandItem(
-                    name: "MySQL",
-                    description: "Homebrew Service",
-                    iconName: "server.rack",
-                    startCommand: "brew services start mysql",
-                    stopCommand: "brew services stop mysql",
-                    checkCommand: "pgrep mysqld"
-                ),
-                CommandItem(
-                    name: "Redis",
-                    description: "Homebrew Service",
-                    iconName: "memorychip",
-                    startCommand: "brew services start redis",
-                    stopCommand: "brew services stop redis",
-                    checkCommand: "pgrep redis-server"
-                )
+                CommandItem(name: "MySQL", description: "Homebrew Service", iconName: "server.rack", startCommand: "brew services start mysql", stopCommand: "brew services stop mysql", checkCommand: "pgrep mysqld"),
+                CommandItem(name: "Redis", description: "Homebrew Service", iconName: "memorychip", startCommand: "brew services start redis", stopCommand: "brew services stop redis", checkCommand: "pgrep redis-server")
             ]
         }
         checkAllStatus()
     }
     
     func loadBookmarks() {
-        if let data = UserDefaults.standard.data(forKey: bookmarkKey),
+        let cloudData = NSUbiquitousKeyValueStore.default.data(forKey: bookmarkKey)
+        let localData = UserDefaults.standard.data(forKey: bookmarkKey)
+        
+        if let data = cloudData ?? localData,
            let decoded = try? JSONDecoder().decode([BookmarkItem].self, from: data) {
             self.bookmarks = decoded
         }
@@ -69,12 +86,16 @@ class AppViewModel: ObservableObject {
     func saveCommands() {
         if let encoded = try? JSONEncoder().encode(commands) {
             UserDefaults.standard.set(encoded, forKey: storageKey)
+            NSUbiquitousKeyValueStore.default.set(encoded, forKey: storageKey)
+            NSUbiquitousKeyValueStore.default.synchronize()
         }
     }
     
     func saveBookmarks() {
         if let encoded = try? JSONEncoder().encode(bookmarks) {
             UserDefaults.standard.set(encoded, forKey: bookmarkKey)
+            NSUbiquitousKeyValueStore.default.set(encoded, forKey: bookmarkKey)
+            NSUbiquitousKeyValueStore.default.synchronize()
         }
     }
     
