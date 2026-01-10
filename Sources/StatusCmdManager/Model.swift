@@ -279,3 +279,113 @@ let iconLibrary: [IconCategory] = [
 
 // 扁平化列表用于向后兼容或搜索
 let presetIcons: [String] = iconLibrary.flatMap { $0.icons }
+
+// MARK: - Bookmark Models
+
+struct BookmarkItem: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var title: String
+    var url: String
+    var iconUrl: String? // 远程图标 URL
+    var addedAt: Date = Date()
+}
+
+struct WebMetadata {
+    var title: String?
+    var iconUrl: String?
+}
+
+// 网页元数据抓取器
+class WebMetadataFetcher {
+    static func fetch(urlStr: String, completion: @escaping (WebMetadata) -> Void) {
+        guard let url = URL(string: urlStr) else {
+            completion(WebMetadata(title: nil, iconUrl: nil))
+            return
+        }
+        
+        var request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
+        // 模拟浏览器 User-Agent，避免被屏蔽
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+        
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            guard let data = data,
+                  let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii)
+            else {
+                completion(WebMetadata(title: nil, iconUrl: nil))
+                return
+            }
+            
+            let finalUrl = response?.url ?? url // 使用最终 URL 处理重定向
+            
+            // 1. 提取标题
+            // <title>...</title> 可能包含换行符或属性
+            var title: String? = nil
+            if let regex = try? NSRegularExpression(pattern: "<title[^>]*>([\\s\\S]*?)</title>", options: .caseInsensitive),
+               let match = regex.firstMatch(in: html, options: [], range: NSRange(location: 0, length: html.utf16.count)),
+               let range = Range(match.range(at: 1), in: html) {
+                title = String(html[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            
+            // 2. 提取图标
+            // 优先级: apple-touch-icon > og:image (如果有意当作图标) > icon > shortcut icon > favicon.ico
+            var iconUrl: String? = nil
+            
+            let iconRelations = ["apple-touch-icon", "icon", "shortcut icon"]
+            
+            // 辅助查找函数
+            func findHref(rel: String) -> String? {
+                // 匹配 <link ... rel="x" ... href="y" ...> 或 <link ... href="y" ... rel="x" ...>
+                // 简化逻辑：找到包含 rel="value" 的 link 标签，然后提取 href
+                // 正则说明：<link (任意非>) rel=['"]value['"] (任意非>) href=['"](目标)['"]
+                let pattern1 = "<link[^>]*rel=[\"']\(rel)[\"'][^>]*href=[\"']([^\"']+)[\"']"
+                // 正则说明：<link (任意非>) href=['"](目标)['"] (任意非>) rel=['"]value['"]
+                let pattern2 = "<link[^>]*href=[\"']([^\"']+)[\"'][^>]*rel=[\"']\(rel)[\"']"
+                
+                if let match = firstMatch(pattern: pattern1, in: html) { return match }
+                if let match = firstMatch(pattern: pattern2, in: html) { return match }
+                return nil
+            }
+            
+            for rel in iconRelations {
+                if let href = findHref(rel: rel), let resolved = resolveUrl(base: finalUrl, relative: href) {
+                    iconUrl = resolved
+                    break
+                }
+            }
+            
+            // 尝试 Open Graph Image 作为备选 (通常很大，但在没有 favicon 时也好过没有)
+            if iconUrl == nil {
+                let ogPattern = "<meta[^>]*property=[\"']og:image[\"'][^>]*content=[\"']([^\"']+)[\"']"
+                if let href = firstMatch(pattern: ogPattern, in: html), let resolved = resolveUrl(base: finalUrl, relative: href) {
+                    iconUrl = resolved
+                }
+            }
+            
+            // 默认 favicon
+            if iconUrl == nil {
+                iconUrl = resolveUrl(base: finalUrl, relative: "/favicon.ico")
+            }
+            
+            DispatchQueue.main.async {
+                completion(WebMetadata(title: title, iconUrl: iconUrl))
+            }
+        }
+        task.resume()
+    }
+    
+    private static func firstMatch(pattern: String, in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return nil }
+        let nsString = text as NSString
+        let results = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsString.length))
+        if let first = results.first, first.numberOfRanges >= 2 {
+            return nsString.substring(with: first.range(at: 1))
+        }
+        return nil
+    }
+    
+    private static func resolveUrl(base: URL, relative: String) -> String? {
+        if relative.hasPrefix("http") { return relative }
+        if relative.hasPrefix("//") { return "https:" + relative }
+        return URL(string: relative, relativeTo: base)?.absoluteString
+    }
+}

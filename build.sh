@@ -16,7 +16,7 @@ mkdir -p "$RESOURCES_DIR"
 echo "编译 Swift 代码..."
 swiftc $SOURCES \
     -o "$MACOS_DIR/$APP_NAME" \
-    -target arm64-apple-macosx11.0 \
+    -target arm64-apple-macosx12.0 \
     -sdk $(xcrun --show-sdk-path --sdk macosx) \
     -O
 

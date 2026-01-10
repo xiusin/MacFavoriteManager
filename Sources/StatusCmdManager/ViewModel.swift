@@ -11,10 +11,23 @@ class AppViewModel: ObservableObject {
     @Published var errorMessage: String = ""
     @Published var isEditingMode: Bool = false
     
+    // Bookmark State
+    @Published var bookmarks: [BookmarkItem] = []
+    @Published var isFetchingMetadata: Bool = false
+    @Published var isBookmarkGridView: Bool = true
+    
     private let storageKey = "UserCommands_v1"
+    private let bookmarkKey = "UserBookmarks_v1"
+    private let viewModeKey = "isBookmarkGridView"
     
     init() {
         loadCommands()
+        loadBookmarks()
+        self.isBookmarkGridView = UserDefaults.standard.object(forKey: viewModeKey) as? Bool ?? true
+    }
+    
+    func saveViewMode() {
+        UserDefaults.standard.set(isBookmarkGridView, forKey: viewModeKey)
     }
     
     // MARK: - Persistence
@@ -46,10 +59,99 @@ class AppViewModel: ObservableObject {
         checkAllStatus()
     }
     
+    func loadBookmarks() {
+        if let data = UserDefaults.standard.data(forKey: bookmarkKey),
+           let decoded = try? JSONDecoder().decode([BookmarkItem].self, from: data) {
+            self.bookmarks = decoded
+        }
+    }
+    
     func saveCommands() {
         if let encoded = try? JSONEncoder().encode(commands) {
             UserDefaults.standard.set(encoded, forKey: storageKey)
         }
+    }
+    
+    func saveBookmarks() {
+        if let encoded = try? JSONEncoder().encode(bookmarks) {
+            UserDefaults.standard.set(encoded, forKey: bookmarkKey)
+        }
+    }
+    
+    // MARK: - Bookmark Management
+    func fetchMetadata(url: String, completion: @escaping (WebMetadata) -> Void) {
+        var fixedUrl = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !fixedUrl.hasPrefix("http") { fixedUrl = "https://" + fixedUrl }
+        WebMetadataFetcher.fetch(urlStr: fixedUrl, completion: completion)
+    }
+
+    func addBookmark(title: String, url: String, iconUrl: String?) {
+        // 简单修正 URL
+        var fixedUrl = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !fixedUrl.hasPrefix("http") { fixedUrl = "https://" + fixedUrl }
+        
+        let id = UUID()
+        var finalIconPath = iconUrl
+        
+        // 尝试缓存图标到本地
+        if let remoteIconUrl = iconUrl, let remoteUrl = URL(string: remoteIconUrl) {
+            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            let iconsDir = appSupport.appendingPathComponent("StatusCmdManager/Icons")
+            
+            do {
+                try FileManager.default.createDirectory(at: iconsDir, withIntermediateDirectories: true)
+                let localFilename = "\(id.uuidString).png" // 假设是 png，或者直接存数据
+                let localFileUrl = iconsDir.appendingPathComponent(localFilename)
+                
+                // 异步下载并保存，这里为了简化逻辑在主线程发起异步任务，UI 会先更新
+                DispatchQueue.global().async {
+                    if let data = try? Data(contentsOf: remoteUrl) {
+                        try? data.write(to: localFileUrl)
+                        
+                        // 更新内存中的 Item 指向本地路径
+                        DispatchQueue.main.async {
+                            if let index = self.bookmarks.firstIndex(where: { $0.id == id }) {
+                                var item = self.bookmarks[index]
+                                item.iconUrl = localFileUrl.absoluteString
+                                self.bookmarks[index] = item
+                                self.saveBookmarks()
+                            }
+                        }
+                    }
+                }
+                
+                // 暂时先存远程，下载完更新为本地
+                finalIconPath = remoteIconUrl
+            } catch {
+                print("Failed to setup icon cache: \(error)")
+            }
+        }
+        
+        let newItem = BookmarkItem(id: id, title: title.isEmpty ? "Bookmark" : title, url: fixedUrl, iconUrl: finalIconPath)
+        bookmarks.append(newItem)
+        saveBookmarks()
+    }
+    
+    func deleteBookmark(at offsets: IndexSet) {
+        bookmarks.remove(atOffsets: offsets)
+        saveBookmarks()
+    }
+    
+    func updateBookmark(_ item: BookmarkItem) {
+        if let index = bookmarks.firstIndex(where: { $0.id == item.id }) {
+            bookmarks[index] = item
+            saveBookmarks()
+        }
+    }
+    
+    func moveCommand(from source: IndexSet, to destination: Int) {
+        commands.move(fromOffsets: source, toOffset: destination)
+        saveCommands()
+    }
+    
+    func moveBookmark(from source: IndexSet, to destination: Int) {
+        bookmarks.move(fromOffsets: source, toOffset: destination)
+        saveBookmarks()
     }
     
     // MARK: - Command Management
