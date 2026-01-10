@@ -120,8 +120,9 @@ struct ContentView: View {
                                     Text(tab.title)
                                         .font(.system(size: 11, weight: .medium))
                                 }
-                                .padding(.vertical, 4)
-                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .padding(.horizontal, 12)
+                                .contentShape(Rectangle()) // 确保透明区域也能响应点击
                                 .background(
                                     currentTab == tab ? 
                                     Color.black.opacity(0.1) : Color.clear
