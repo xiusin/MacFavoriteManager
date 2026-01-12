@@ -10,7 +10,7 @@ class FloatingWindowController: ObservableObject {
     @Published var isExpanded: Bool = false
     
     // Dependencies
-    let clipboardManager = ClipboardManager()
+    let clipboardManager = ClipboardManager.shared
     
     init() {
         createWindow()
@@ -47,16 +47,9 @@ class FloatingWindowController: ObservableObject {
     func show(at point: NSPoint) {
         guard let window = window else { return }
         
-        // 初始位置，修正 y 坐标 (屏幕坐标系转换)
-        // NSEvent.mouseLocation 的原点在屏幕左下角
-        // NSWindow frame 的原点也在左下角
-        // 所以直接使用 point 即可
-        
         window.setFrameOrigin(NSPoint(x: point.x - 30, y: point.y - 30))
         window.makeKeyAndOrderFront(nil)
-        
-        // 激活应用以接收焦点（如果需要输入）
-        // NSApp.activate(ignoringOtherApps: true) 
+        NSApp.activate(ignoringOtherApps: true) // Activate to receive key events
         
         withAnimation {
             isVisible = true
@@ -70,6 +63,7 @@ class FloatingWindowController: ObservableObject {
             isExpanded = false
         }
         window?.orderOut(nil)
+        NSApp.hide(nil) // Return focus
     }
 }
 
@@ -110,14 +104,22 @@ struct FloatingToolIcon: View {
         .frame(width: 50, height: 50)
         .scaleEffect(isHovering ? 1.1 : 1.0)
         .onTapGesture {
-            withAnimation(.spring()) {
-                controller.isExpanded = true
-                // Update window size
-                controller.window?.setContentSize(NSSize(width: 240, height: 320))
-            }
+            expandMenu()
         }
         .onHover { hover in
             withAnimation { isHovering = hover }
+        }
+        // Auto expand if triggered via shortcut
+        .onAppear {
+             // Optional: if triggered by shortcut, maybe we want auto-expand?
+             // For now keep manual click or update controller logic
+        }
+    }
+    
+    func expandMenu() {
+        withAnimation(.spring()) {
+            controller.isExpanded = true
+            controller.window?.setContentSize(NSSize(width: 240, height: 320))
         }
     }
 }
@@ -127,11 +129,14 @@ struct FloatingToolMenu: View {
     @EnvironmentObject var clipboardManager: ClipboardManager
     @State private var selectedTab = 0 // 0: Clipboard, 1: Tools
     
+    // Keyboard Selection
+    @State private var selectedIndex: Int = 0
+    
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text(selectedTab == 0 ? "剪贴板" : "工具")
+                Text(selectedTab == 0 ? "剪贴板 (⇅选择 ↵粘贴)" : "工具")
                     .font(.system(size: 13, weight: .bold))
                 Spacer()
                 
@@ -160,17 +165,25 @@ struct FloatingToolMenu: View {
             
             if selectedTab == 0 {
                 // Clipboard List
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(clipboardManager.history) { item in
-                            ClipboardRow(item: item) {
-                                clipboardManager.copyToClipboard(item)
-                                controller.hide()
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 8) {
+                            ForEach(Array(clipboardManager.history.enumerated()), id: \.element.id) { index, item in
+                                ClipboardRow(item: item, isSelected: index == selectedIndex) {
+                                    confirmSelection(item)
+                                }
+                                .id(index)
                             }
                         }
+                        .padding(8)
                     }
-                    .padding(8)
+                    .onChange(of: selectedIndex) { newIndex in
+                        proxy.scrollTo(newIndex, anchor: .center)
+                    }
                 }
+                .background(KeyEventHandlingView { key in
+                    handleKey(key)
+                })
             } else {
                 // Tools List
                 VStack(spacing: 10) {
@@ -199,10 +212,64 @@ struct FloatingToolMenu: View {
         )
         .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
     }
+    
+    func handleKey(_ event: NSEvent) {
+        let maxIndex = clipboardManager.history.count - 1
+        guard maxIndex >= 0 else { return }
+        
+        switch event.keyCode {
+        case 126: // Up Arrow
+            if selectedIndex > 0 { selectedIndex -= 1 }
+        case 125: // Down Arrow
+            if selectedIndex < maxIndex { selectedIndex += 1 }
+        case 36: // Enter
+            let item = clipboardManager.history[selectedIndex]
+            confirmSelection(item)
+        case 53: // Esc
+            controller.hide()
+        default: break
+        }
+    }
+    
+    func confirmSelection(_ item: ClipboardItem) {
+        controller.hide()
+        // Delay slightly to allow window to hide
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            clipboardManager.pasteToActiveApp(item)
+        }
+    }
+}
+
+// Invisible view to handle keyboard events
+struct KeyEventHandlingView: NSViewRepresentable {
+    var onKeyDown: (NSEvent) -> Void
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = KeyView()
+        view.onKeyDown = onKeyDown
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {}
+    
+    class KeyView: NSView {
+        var onKeyDown: ((NSEvent) -> Void)?
+        
+        override var acceptsFirstResponder: Bool { true }
+        
+        override func viewDidMoveToWindow() {
+            window?.makeFirstResponder(self)
+        }
+        
+        override func keyDown(with event: NSEvent) {
+            onKeyDown?(event)
+        }
+    }
 }
 
 struct ClipboardRow: View {
     let item: ClipboardItem
+    let isSelected: Bool
     let action: () -> Void
     @State private var isHovering = false
     
@@ -212,11 +279,16 @@ struct ClipboardRow: View {
                 Text(item.text)
                     .lineLimit(2)
                     .font(.system(size: 11))
-                    .foregroundColor(.primary)
+                    .foregroundColor(isSelected ? .white : .primary)
                 Spacer()
+                if isSelected {
+                    Image(systemName: "return")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.8))
+                }
             }
             .padding(8)
-            .background(isHovering ? Color.blue.opacity(0.1) : Color.clear)
+            .background(isSelected ? Color.blue : (isHovering ? Color.blue.opacity(0.1) : Color.clear))
             .cornerRadius(6)
         }
         .buttonStyle(PlainButtonStyle())

@@ -9,6 +9,8 @@ struct ClipboardItem: Identifiable, Equatable, Codable {
 }
 
 class ClipboardManager: ObservableObject {
+    static let shared = ClipboardManager()
+    
     @Published var history: [ClipboardItem] = []
     private var timer: Timer?
     private var lastChangeCount: Int
@@ -40,7 +42,7 @@ class ClipboardManager: ObservableObject {
                 DispatchQueue.main.async {
                     self.history.insert(newItem, at: 0)
                     // 限制最大条数
-                    if self.history.count > 50 {
+                    if self.history.count > 100 {
                         self.history.removeLast()
                     }
                     self.saveHistory()
@@ -54,6 +56,36 @@ class ClipboardManager: ObservableObject {
         pasteboard.clearContents()
         pasteboard.setString(item.text, forType: .string)
         // 更新 changeCount 避免被自己再次捕获（或者不做处理，让其成为最新）
+    }
+    
+    func pasteToActiveApp(_ item: ClipboardItem) {
+        // 1. Copy to clipboard first
+        copyToClipboard(item)
+        
+        // 2. Hide our app and return focus to the previous app
+        // Note: The UI hiding logic usually happens in the View/Controller, 
+        // but we need to ensure the previous app is active before sending keys.
+        NSApp.hide(nil)
+        
+        // 3. Wait a bit for focus to switch, then simulate Cmd+V
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            let source = CGEventSource(stateID: .hidSystemState)
+            
+            let keyV: CGKeyCode = 9
+            let cmdFlag = CGEventFlags.maskCommand
+            
+            // Key Down
+            if let eventDown = CGEvent(keyboardEventSource: source, virtualKey: keyV, keyDown: true) {
+                eventDown.flags = cmdFlag
+                eventDown.post(tap: .cghidEventTap)
+            }
+            
+            // Key Up
+            if let eventUp = CGEvent(keyboardEventSource: source, virtualKey: keyV, keyDown: false) {
+                eventUp.flags = cmdFlag
+                eventUp.post(tap: .cghidEventTap)
+            }
+        }
     }
     
     // Persistence
