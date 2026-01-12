@@ -4,6 +4,7 @@ import Combine
 struct BrewManagerView: View {
     @ObservedObject var viewModel: AppViewModel
     var onDismiss: () -> Void
+    @Environment(\.colorScheme) var colorScheme
     
     @State private var selectedTab: Int = 0 // 0: My Services, 1: Library
     
@@ -23,28 +24,30 @@ struct BrewManagerView: View {
                 
                 Spacer()
                 
-                // Segmented Control
-                Picker("", selection: $selectedTab) {
-                    Text("我的服务").tag(0)
-                    Text("服务库").tag(1)
+                // Neumorphic Segmented Control
+                HStack(spacing: 0) {
+                    SegmentButton(title: "我的服务", isSelected: selectedTab == 0) { selectedTab = 0 }
+                    SegmentButton(title: "服务库", isSelected: selectedTab == 1) { selectedTab = 1 }
                 }
-                .pickerStyle(SegmentedPickerStyle())
-                .frame(width: 180)
+                .padding(2)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
+                        )
+                )
                 
                 Spacer()
                 
                 // Refresh Button
-                Button(action: { 
+                NeumorphicIconButton(icon: "arrow.clockwise", color: .blue) {
                     if selectedTab == 0 { viewModel.refreshBrewServices() }
                     else { if !viewModel.searchQuery.isEmpty { viewModel.searchBrew() } else { viewModel.refreshBrewServices() } }
-                }) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 14))
-                        .foregroundColor(.blue)
-                        .rotationEffect(.degrees(viewModel.isBrewLoading || viewModel.isSearching ? 360 : 0))
-                        .animation(viewModel.isBrewLoading || viewModel.isSearching ? Animation.linear(duration: 1).repeatForever(autoreverses: false) : .default, value: viewModel.isBrewLoading || viewModel.isSearching)
                 }
-                .buttonStyle(PlainButtonStyle())
+                .rotationEffect(.degrees(viewModel.isBrewLoading || viewModel.isSearching ? 360 : 0))
+                .animation(viewModel.isBrewLoading || viewModel.isSearching ? Animation.linear(duration: 1).repeatForever(autoreverses: false) : .default, value: viewModel.isBrewLoading || viewModel.isSearching)
                 .disabled(viewModel.isBrewLoading || viewModel.isSearching)
             }
             .padding(.horizontal, 20)
@@ -63,6 +66,28 @@ struct BrewManagerView: View {
         }
         .background(Color(NSColor.windowBackgroundColor))
     }
+    
+    struct SegmentButton: View {
+        let title: String
+        let isSelected: Bool
+        let action: () -> Void
+        
+        var body: some View {
+            Button(action: action) {
+                Text(title)
+                    .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                    .foregroundColor(isSelected ? .primary : .secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(isSelected ? Color(NSColor.windowBackgroundColor) : Color.clear)
+                            .shadow(color: Color.black.opacity(isSelected ? 0.1 : 0), radius: 2, x: 0, y: 1)
+                    )
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+    }
 }
 
 // MARK: - My Services Tab
@@ -78,10 +103,6 @@ struct MyServicesView: View {
                 VStack(spacing: 12) {
                     Image(systemName: "shippingbox").font(.largeTitle).foregroundColor(.secondary.opacity(0.3))
                     Text("未发现已安装的服务").font(.body).foregroundColor(.secondary)
-                    Button("去安装") {
-                        // Switch to library tab? Need binding or just let user click
-                    }
-                    .buttonStyle(PlainButtonStyle()).foregroundColor(.blue)
                 }
                 .padding(.top, 50)
             } else {
@@ -168,6 +189,7 @@ struct ServiceStoreView: View {
 struct StoreItemRow: View {
     let name: String
     @ObservedObject var viewModel: AppViewModel
+    @Environment(\.colorScheme) var colorScheme
     
     var isInstalled: Bool {
         viewModel.installedFormulae.contains(name) || viewModel.brewServices.contains(where: { $0.name == name })
@@ -179,33 +201,42 @@ struct StoreItemRow: View {
     
     var body: some View {
         HStack(spacing: 12) {
+            // Icon Container
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                    .frame(width: 36, height: 36)
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.6))
+                    .shadow(color: Color.white.opacity(colorScheme == .dark ? 0.05 : 0.6), radius: 1, x: -1, y: -1)
+                    .shadow(color: Color.black.opacity(0.1), radius: 1, x: 1, y: 1)
+                
                 Image(systemName: icon)
                     .font(.system(size: 16))
                     .foregroundColor(.secondary)
             }
+            .frame(width: 36, height: 36)
             
             Text(name)
                 .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.primary.opacity(0.8))
             
             Spacer()
             
             if isInstalled {
                 Button(action: {
-                    // Confirm uninstall?
                     viewModel.uninstallBrewService(BrewService(name: name))
                 }) {
                     Text("卸载")
-                        .font(.system(size: 11))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 4)
-                        .background(Color.red.opacity(0.1))
-                        .foregroundColor(.red)
-                        .cornerRadius(12)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.red.opacity(0.2), lineWidth: 1))
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .background(
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color(NSColor.controlBackgroundColor))
+                                    .shadow(color: Color.white.opacity(0.5), radius: 1, x: -1, y: -1)
+                                    .shadow(color: Color.black.opacity(0.1), radius: 1, x: 1, y: 1)
+                            }
+                        )
+                        .foregroundColor(.red.opacity(0.8))
                 }
                 .buttonStyle(PlainButtonStyle())
             } else {
@@ -213,21 +244,29 @@ struct StoreItemRow: View {
                     viewModel.installBrewService(name)
                 }) {
                     Text("安装")
-                        .font(.system(size: 11, weight: .medium))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 4)
-                        .background(Color.blue)
+                        .font(.system(size: 11, weight: .bold))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .background(
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color.blue)
+                                    .shadow(color: Color.blue.opacity(0.3), radius: 2, x: 0, y: 2)
+                            }
+                        )
                         .foregroundColor(.white)
-                        .cornerRadius(12)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
+        .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(NSColor.controlBackgroundColor).opacity(0.3))
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(NSColor.windowBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                )
         )
     }
 }
@@ -235,6 +274,7 @@ struct StoreItemRow: View {
 struct BrewServiceRow: View {
     let service: BrewService
     @ObservedObject var viewModel: AppViewModel
+    @Environment(\.colorScheme) var colorScheme
     
     var statusColor: Color {
         switch service.status {
@@ -248,21 +288,32 @@ struct BrewServiceRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Status Dot
-            Circle()
-                .fill(statusColor)
-                .frame(width: 8, height: 8)
-                .shadow(color: statusColor.opacity(0.5), radius: 2, x: 0, y: 0)
+            ZStack {
+                Circle()
+                    .fill(Color(NSColor.controlBackgroundColor))
+                    .frame(width: 14, height: 14)
+                    .shadow(color: Color.white.opacity(0.5), radius: 1, x: -0.5, y: -0.5)
+                    .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0.5, y: 0.5)
+                
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 6, height: 6)
+                    .shadow(color: statusColor.opacity(0.6), radius: 2, x: 0, y: 0)
+            }
             
             // Info
             VStack(alignment: .leading, spacing: 2) {
                 Text(service.name)
                     .font(.system(size: 13, weight: .medium))
-                HStack {
+                    .foregroundColor(.primary.opacity(0.9))
+                HStack(spacing: 4) {
                     Text(service.status.capitalized)
                         .font(.caption2)
                         .foregroundColor(statusColor)
                     if let user = service.user {
                         Text("•")
+                            .font(.caption2)
+                            .foregroundColor(.secondary.opacity(0.5))
                         Text(user)
                             .font(.caption2)
                             .foregroundColor(.secondary)
@@ -273,53 +324,21 @@ struct BrewServiceRow: View {
             Spacer()
             
             // Actions
-            HStack(spacing: 8) {
-                if service.status == "started" {
-                    ActionButton(icon: "stop.fill", color: .orange) {
-                        viewModel.operateBrewService(service, action: "stop")
-                    }
-                    ActionButton(icon: "arrow.clockwise", color: .blue) {
-                        viewModel.operateBrewService(service, action: "restart")
-                    }
-                } else {
-                    ActionButton(icon: "play.fill", color: .green) {
-                        viewModel.operateBrewService(service, action: "start")
-                    }
-                }
-                
+            HStack(spacing: 12) {
                 // Uninstall (danger)
-                ActionButton(icon: "trash", color: .red.opacity(0.8)) {
+                NeumorphicActionButton(icon: "trash", color: .red.opacity(0.8)) {
                     viewModel.uninstallBrewService(service)
                 }
             }
         }
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(NSColor.windowBackgroundColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                 )
         )
-    }
-    
-    struct ActionButton: View {
-        let icon: String
-        let color: Color
-        let action: () -> Void
-        
-        var body: some View {
-            Button(action: action) {
-                Image(systemName: icon)
-                    .font(.system(size: 12))
-                    .foregroundColor(color)
-                    .frame(width: 26, height: 26)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(6)
-                    .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: 1)
-            }
-            .buttonStyle(PlainButtonStyle())
-        }
     }
 }

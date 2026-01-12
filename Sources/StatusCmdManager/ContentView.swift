@@ -410,17 +410,18 @@ struct BookmarkRow: View {
             )
             .contentShape(Rectangle())
             .offset(x: offset)
-            // 整个区域的点击手势
-            .onTapGesture {
-                if isSwiped {
-                    withAnimation(.spring()) { offset = 0; isSwiped = false }
-                } else {
-                    if let url = URL(string: item.url) { NSWorkspace.shared.open(url) }
-                }
-            }
-            // 整个区域的右键
+            // 整个区域的交互：左键打开，右键菜单
             .overlay(
-                RightClickDetector { showMenu = true }
+                RightClickDetector(
+                    onRightClick: { showMenu = true },
+                    onLeftClick: {
+                        if isSwiped {
+                            withAnimation(.spring()) { offset = 0; isSwiped = false }
+                        } else {
+                            if let url = URL(string: item.url) { NSWorkspace.shared.open(url) }
+                        }
+                    }
+                )
             )
             // 左侧 30px 的透明拖拽触发区
             .overlay(
@@ -642,17 +643,16 @@ struct BookmarkCard: View {
                 )
         )
         .contentShape(Rectangle())
-        .onTapGesture {
-            if let url = URL(string: item.url) {
-                NSWorkspace.shared.open(url)
-            }
-        }
-        .onLongPressGesture {
-            showMenu = true
-        }
-        .overlay(
-            RightClickDetector { showMenu = true }
-        )
+            .overlay(
+                RightClickDetector(
+                    onRightClick: { showMenu = true },
+                    onLeftClick: {
+                        if let url = URL(string: item.url) {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                )
+            )
         .popover(isPresented: $showMenu, arrowEdge: .bottom) {
             BookmarkContextMenu(onEdit: onEdit, onDelete: onDelete, showMenu: $showMenu)
         }
@@ -1096,20 +1096,36 @@ struct CommandEditView: View {
 // 用于捕获右键点击的透明视图
 struct RightClickDetector: NSViewRepresentable {
     var onRightClick: () -> Void
+    var onLeftClick: (() -> Void)? = nil
     
     func makeNSView(context: Context) -> NSView {
         let view = RightClickView()
         view.onRightClick = onRightClick
+        view.onLeftClick = onLeftClick
         return view
     }
     
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if let view = nsView as? RightClickView {
+            view.onRightClick = onRightClick
+            view.onLeftClick = onLeftClick
+        }
+    }
     
     class RightClickView: NSView {
         var onRightClick: (() -> Void)?
+        var onLeftClick: (() -> Void)?
         
         override func rightMouseDown(with event: NSEvent) {
             onRightClick?()
+        }
+        
+        override func mouseDown(with event: NSEvent) {
+            if let onLeftClick = onLeftClick {
+                onLeftClick()
+            } else {
+                super.mouseDown(with: event)
+            }
         }
     }
 }
@@ -1173,13 +1189,15 @@ struct NeumorphicCard: View {
             )
             .contentShape(Rectangle())
             .offset(x: offset)
-            .onTapGesture {
-                if isSwiped {
-                    withAnimation(.spring()) { offset = 0; isSwiped = false }
-                }
-            }
             .overlay(
-                RightClickDetector { showMenu = true }
+                RightClickDetector(
+                    onRightClick: { showMenu = true },
+                    onLeftClick: {
+                        if isSwiped {
+                            withAnimation(.spring()) { offset = 0; isSwiped = false }
+                        }
+                    }
+                )
             )
             // 30px 拖拽感应区
             .overlay(
