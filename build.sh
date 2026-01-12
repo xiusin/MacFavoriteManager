@@ -1,7 +1,8 @@
 #!/bin/bash
 
 APP_NAME="StatusCmdManager"
-SOURCES="Sources/StatusCmdManager/*.swift"
+# Find all swift files recursively
+SOURCES=$(find Sources/StatusCmdManager -name "*.swift")
 BUILD_DIR="build"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_BUNDLE/Contents"

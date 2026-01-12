@@ -33,11 +33,13 @@ enum AppRoute: Equatable {
 enum AppTab: Int, CaseIterable {
     case bookmarks = 0
     case services = 1
+    case tools = 2
     
     var title: String {
         switch self {
         case .bookmarks: return "收藏夹"
         case .services: return "服务控制"
+        case .tools: return "工具箱"
         }
     }
     
@@ -45,6 +47,7 @@ enum AppTab: Int, CaseIterable {
         switch self {
         case .bookmarks: return "bookmark.fill"
         case .services: return "terminal.fill"
+        case .tools: return "briefcase.fill"
         }
     }
 }
@@ -148,7 +151,7 @@ struct ContentView: View {
                             NeumorphicIconButton(icon: "plus", action: {
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { route = .editor(nil) }
                             })
-                        } else {
+                        } else if currentTab == .bookmarks {
                             // 布局切换按钮
                             NeumorphicIconButton(
                                 icon: viewModel.isBookmarkGridView ? "list.bullet" : "square.grid.2x2",
@@ -205,6 +208,9 @@ struct ContentView: View {
                             .zIndex(1)
                             .background(Color(NSColor.windowBackgroundColor))
                         }
+                    } else if currentTab == .tools {
+                        ToolsView(viewModel: viewModel)
+                            .transition(.opacity)
                     } else {
                         BookmarkListView(
                             viewModel: viewModel,

@@ -43,6 +43,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 strongSelf.closePopover(sender: event)
             }
         }
+        
+        // 4. 初始化全局快捷键 (Option + Space) 呼出浮窗
+        HotKeyManager.shared.onTrigger = {
+            let mouseLoc = NSEvent.mouseLocation
+            FloatingWindowController.shared.toggle(at: mouseLoc)
+        }
+        HotKeyManager.shared.startMonitoring()
     }
     
     @objc func togglePopover(_ sender: AnyObject?) {
