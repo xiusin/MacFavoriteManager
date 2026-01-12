@@ -59,6 +59,48 @@ class ShellRunner {
         }
     }
     
+    static func listInstalledFormulae() -> Set<String> {
+        let cmd = "/opt/homebrew/bin/brew list --formula -1"
+        let result = run(cmd)
+        guard result.status == 0 else { return [] }
+        let lines = result.output.components(separatedBy: .newlines)
+        return Set(lines.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+    }
+
+    static func searchBrew(query: String, completion: @escaping ([String]) -> Void) {
+        let cmd = "/opt/homebrew/bin/brew search \(query)"
+        runAsync(cmd) { result in
+            guard result.status == 0 else {
+                completion([])
+                return
+            }
+            // Parse output: brew search output can be complex, usually it lists formulae.
+            // We'll just grab non-empty lines that don't start with "==>".
+            // Note: brew search output is formatted in columns often, but piped it might be one per line?
+            // Actually brew search is meant for human reading.
+            // Better to use a simpler parse or just split by whitespace.
+            
+            let output = result.output
+            var matches: [String] = []
+            
+            let lines = output.components(separatedBy: .newlines)
+            for line in lines {
+                if line.starts(with: "==>") { continue }
+                if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+                
+                // Split by spaces as it might be multi-column
+                let parts = line.components(separatedBy: .whitespaces)
+                for part in parts {
+                    let clean = part.trimmingCharacters(in: .whitespaces)
+                    if !clean.isEmpty && !clean.contains("Casks") {
+                        matches.append(clean)
+                    }
+                }
+            }
+            completion(matches)
+        }
+    }
+    
     static func listBrewServices() -> [BrewService] {
         let cmd = "/opt/homebrew/bin/brew services list"
         let result = run(cmd)
@@ -67,19 +109,42 @@ class ShellRunner {
         let lines = result.output.components(separatedBy: .newlines)
         var services: [BrewService] = []
         
+        // Skip header: Name Status User File
         for line in lines.dropFirst() {
             let parts = line.split(separator: " ", omittingEmptySubsequences: true)
-            if let name = parts.first {
-                services.append(BrewService(name: String(name)))
+            if parts.count >= 2, let name = parts.first {
+                let status = String(parts[1])
+                let user = parts.count >= 3 ? String(parts[2]) : nil
+                services.append(BrewService(name: String(name), status: status, user: user))
+            } else if let name = parts.first {
+                 services.append(BrewService(name: String(name), status: "unknown", user: nil))
             }
         }
         return services
+    }
+    
+    static func operateBrewService(action: String, service: String, completion: @escaping (ShellResult) -> Void) {
+        // action: start, stop, restart
+        let cmd = "/opt/homebrew/bin/brew services \(action) \(service)"
+        runAsync(cmd, completion: completion)
+    }
+    
+    static func installBrewService(_ name: String, completion: @escaping (ShellResult) -> Void) {
+        let cmd = "/opt/homebrew/bin/brew install \(name)"
+        runAsync(cmd, completion: completion)
+    }
+    
+    static func uninstallBrewService(_ name: String, completion: @escaping (ShellResult) -> Void) {
+        let cmd = "/opt/homebrew/bin/brew uninstall \(name)"
+        runAsync(cmd, completion: completion)
     }
 }
 
 struct BrewService: Identifiable, Hashable {
     let id = UUID()
     let name: String
+    var status: String = "unknown" // started, stopped, none, error
+    var user: String? = nil
 }
 
 // 智能图标匹配器

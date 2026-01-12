@@ -251,4 +251,99 @@ class AppViewModel: ObservableObject {
             self.showErrorToast = false
         }
     }
+    
+    // MARK: - Brew Manager
+    @Published var brewServices: [BrewService] = []
+    @Published var isBrewLoading: Bool = false
+    
+    // Store / Marketplace
+    @Published var installedFormulae: Set<String> = []
+    @Published var searchResults: [String] = []
+    @Published var isSearching: Bool = false
+    @Published var searchQuery: String = ""
+    
+    // Recommended list based on IconMatcher keys (filtered to likely services)
+    var recommendedServices: [String] {
+        let allKeys = IconMatcher.mapping.keys.map { $0 }
+        return allKeys.sorted()
+    }
+    
+    func refreshBrewServices() {
+        isBrewLoading = true
+        // Parallel fetch
+        let group = DispatchGroup()
+        
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            let services = ShellRunner.listBrewServices()
+            DispatchQueue.main.async {
+                self.brewServices = services
+                group.leave()
+            }
+        }
+        
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            let installed = ShellRunner.listInstalledFormulae()
+            DispatchQueue.main.async {
+                self.installedFormulae = installed
+                group.leave()
+            }
+        }
+        
+        group.notify(queue: .main) {
+            self.isBrewLoading = false
+        }
+    }
+    
+    func searchBrew() {
+        guard !searchQuery.isEmpty else {
+            searchResults = []
+            return
+        }
+        
+        isSearching = true
+        ShellRunner.searchBrew(query: searchQuery) { [weak self] results in
+            DispatchQueue.main.async {
+                self?.searchResults = results
+                self?.isSearching = false
+            }
+        }
+    }
+    
+    func operateBrewService(_ service: BrewService, action: String) {
+        isBrewLoading = true
+        ShellRunner.operateBrewService(action: action, service: service.name) { result in
+            DispatchQueue.main.async {
+                if result.status != 0 {
+                    self.showError(title: "\(action.capitalized) Failed", message: result.error.isEmpty ? result.output : result.error)
+                }
+                self.refreshBrewServices()
+            }
+        }
+    }
+    
+    func installBrewService(_ name: String) {
+        isBrewLoading = true
+        ShellRunner.installBrewService(name) { result in
+            DispatchQueue.main.async {
+                if result.status != 0 {
+                    self.showError(title: "Install Failed", message: result.error.isEmpty ? result.output : result.error)
+                }
+                self.refreshBrewServices()
+            }
+        }
+    }
+    
+    func uninstallBrewService(_ service: BrewService) {
+        isBrewLoading = true
+        ShellRunner.uninstallBrewService(service.name) { result in
+            DispatchQueue.main.async {
+                if result.status != 0 {
+                    self.showError(title: "Uninstall Failed", message: result.error.isEmpty ? result.output : result.error)
+                }
+                self.refreshBrewServices()
+            }
+        }
+    }
 }

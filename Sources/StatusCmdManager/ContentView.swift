@@ -27,6 +27,7 @@ enum AppRoute: Equatable {
     case list
     case editor(CommandItem?)
     case addBookmark
+    case brewManager
 }
 
 enum AppTab: Int, CaseIterable {
@@ -141,6 +142,9 @@ struct ContentView: View {
                     
                     HStack(spacing: 8) {
                         if currentTab == .services {
+                            NeumorphicIconButton(icon: "shippingbox", action: {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { route = .brewManager }
+                            })
                             NeumorphicIconButton(icon: "plus", action: {
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { route = .editor(nil) }
                             })
@@ -191,6 +195,15 @@ struct ContentView: View {
                             .transition(.move(edge: .trailing))
                             .zIndex(1)
                             .background(Color(NSColor.windowBackgroundColor)) // 防止透视重叠
+                        }
+                        
+                        if case .brewManager = route {
+                            BrewManagerView(viewModel: viewModel, onDismiss: {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { route = .list }
+                            })
+                            .transition(.move(edge: .trailing))
+                            .zIndex(1)
+                            .background(Color(NSColor.windowBackgroundColor))
                         }
                     } else {
                         BookmarkListView(
