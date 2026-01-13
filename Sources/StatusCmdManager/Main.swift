@@ -51,7 +51,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         HotKeyManager.shared.startMonitoring()
         
-        // 5. 初始化侧边记事本 (Side Note)
+        // 5. 初始化浮窗与记事本 (Pre-warm controllers)
+        _ = FloatingWindowController.shared
         _ = SideNoteWindowController.shared
     }
     

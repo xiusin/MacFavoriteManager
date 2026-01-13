@@ -1,6 +1,12 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Custom Window Subclass
+class FloatingPanel: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 // MARK: - Floating Window Controller
 class FloatingWindowController: ObservableObject {
     static let shared = FloatingWindowController()
@@ -16,8 +22,8 @@ class FloatingWindowController: ObservableObject {
     }
     
     private func createWindow() {
-        // 使用无边框窗口以获得完全的自定义外观
-        let window = NSWindow(
+        // 使用自定义 Panel 以确保可以获取焦点
+        let window = FloatingPanel(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 450),
             styleMask: [.borderless],
             backing: .buffered,
@@ -28,6 +34,7 @@ class FloatingWindowController: ObservableObject {
         window.backgroundColor = .clear
         window.isOpaque = false
         window.hasShadow = true
+        window.isReleasedWhenClosed = false // 关键：防止关闭后被释放
         // 允许在全屏应用之上显示
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         
@@ -40,7 +47,8 @@ class FloatingWindowController: ObservableObject {
     
     // 保持签名兼容，但忽略坐标，强制居中
     func toggle(at point: NSPoint) {
-        if isVisible {
+        // 使用原生 window.isVisible 判断状态更可靠
+        if window?.isVisible == true {
             hide()
         } else {
             show()
@@ -49,6 +57,12 @@ class FloatingWindowController: ObservableObject {
     
     func show() {
         guard let window = window else { return }
+        
+        // 确保应用本身处于显示状态
+        NSApp.unhide(nil)
+        
+        // 核心修复：重置层级，防止被系统降级
+        window.level = .floating
         
         // 核心修复：每次显示都强制居中
         window.center()
@@ -67,7 +81,7 @@ class FloatingWindowController: ObservableObject {
             isVisible = false
         }
         window?.orderOut(nil)
-        NSApp.hide(nil) // 隐藏应用以归还焦点
+        // 移除 NSApp.hide(nil)，防止导致应用进入难以唤醒的完全隐藏状态
     }
 }
 
