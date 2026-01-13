@@ -17,16 +17,14 @@ class HotKeyManager {
     // 更好的方式是使用 Carbon Events，但 swift 中写起来比较繁琐
     
     func startMonitoring() {
+        // 启动时检查辅助功能权限，这是全局快捷键生效的前提
         checkPermissions()
         
         let handler: (NSEvent) -> Void = { [weak self] event in
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             
-            // 检查 Option 键 (Alt)
-            // 注意：有时 flags 可能包含其他非关键修饰键，这里做精确匹配或包含匹配
-            // 这里使用包含匹配：只要按住了 Option 且按下了 Space
+            // 包含匹配：只要按住了 Option 且按下了 Space (keyCode 49)
             if flags.contains(.option) {
-                // 检查 Space (空格键的 keyCode 通常是 49)
                 if event.keyCode == 49 {
                     DispatchQueue.main.async {
                         self?.onTrigger?()
@@ -35,19 +33,19 @@ class HotKeyManager {
             }
         }
         
-        // 1. 全局监听 (当应用在后台时)
+        // 1. 全局监听 (Global Monitor): 当应用处于后台或失去焦点时，捕获系统范围内的按键事件
+        // 注意：这严格依赖系统的 Accessibility 权限
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: handler)
         
-        // 2. 本地监听 (当应用在前台/活跃时)
-        // 返回 event 以便让事件继续传递（否则按键会被吞掉，导致打字时无法输入空格）
-        // 但对于热键，我们通常希望拦截它？
-        // 这里为了安全起见，如果不处理则返回 event，如果处理了也是被动监听
+        // 2. 本地监听 (Local Monitor): 当应用处于前台活跃状态时，捕获当前应用窗口内的按键事件
+        // 返回 event 以便让按键继续传递（不影响正常空格输入）
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             handler(event)
             return event
         }
     }
     
+    /// 辅助功能权限检查：如果未授权，会触发 macOS 系统弹窗提示用户前往设置开启
     func checkPermissions() {
         let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String : true]
         let accessEnabled = AXIsProcessTrustedWithOptions(options)

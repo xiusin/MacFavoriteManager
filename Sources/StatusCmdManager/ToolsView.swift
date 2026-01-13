@@ -58,11 +58,6 @@ struct ToolsView: View {
             // Main Grid Content
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("开发者工具")
-                        .font(.system(size: 16, weight: .bold))
-                        .padding(.horizontal, 4)
-                        .opacity(activeTool == nil ? 1 : 0)
-                    
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(ToolType.allCases, id: \.self) { tool in
                             ToolGridItem(tool: tool) {
@@ -379,13 +374,25 @@ struct JsonTreeViewWrapper: View {
                     .font(.system(.caption, design: .monospaced))
                     .padding(4)
                     .background(NeumorphicInputBackground())
-                    .frame(height: 80)
+                    .frame(height: 240) // Increased for better multi-line input
             }
             
-            Button(action: parseJson) {
-                Text("解析视图")
+            HStack(spacing: 16) {
+                Button(action: parseJson) {
+                    Text("解析预览")
+                }
+                .buttonStyle(NeumorphicPillButtonStyle())
+                
+                if jsonObject != nil {
+                    Button(action: openDetailWindow) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "macwindow")
+                            Text("全屏查看")
+                        }
+                    }
+                    .buttonStyle(NeumorphicPillButtonStyle())
+                }
             }
-            .buttonStyle(NeumorphicPillButtonStyle())
             
             if !errorMsg.isEmpty {
                 Text(errorMsg).foregroundColor(.red).font(.caption)
@@ -393,12 +400,12 @@ struct JsonTreeViewWrapper: View {
             
             if let obj = jsonObject {
                 VStack(alignment: .leading) {
-                    Text("TREE VIEW").font(.caption).bold().foregroundColor(.secondary)
+                    Text("PREVIEW").font(.caption).bold().foregroundColor(.secondary)
                     ScrollView([.horizontal, .vertical]) {
                         JsonNodeView(key: "Root", value: obj)
                             .padding(8)
                     }
-                    .frame(height: 300)
+                    .frame(height: 200)
                     .background(NeumorphicInputBackground())
                 }
             }
@@ -413,6 +420,12 @@ struct JsonTreeViewWrapper: View {
         } catch {
             errorMsg = "Error: \(error.localizedDescription)"
             jsonObject = nil
+        }
+    }
+    
+    func openDetailWindow() {
+        if let obj = jsonObject {
+            JsonDetailWindowController.shared.show(jsonObject: obj)
         }
     }
 }
