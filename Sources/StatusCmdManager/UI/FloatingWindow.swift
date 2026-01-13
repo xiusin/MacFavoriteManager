@@ -7,7 +7,6 @@ class FloatingWindowController: ObservableObject {
     
     var window: NSWindow?
     @Published var isVisible: Bool = false
-    @Published var isExpanded: Bool = false
     
     // Dependencies
     let clipboardManager = ClipboardManager.shared
@@ -17,16 +16,19 @@ class FloatingWindowController: ObservableObject {
     }
     
     private func createWindow() {
+        // 使用无边框窗口以获得完全的自定义外观
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 60, height: 60),
-            styleMask: [.borderless, .nonactivatingPanel],
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 450),
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
+        // 浮动层级，确保在其他窗口之上
         window.level = .floating
         window.backgroundColor = .clear
         window.isOpaque = false
         window.hasShadow = true
+        // 允许在全屏应用之上显示
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         
         let contentView = FloatingRootView(controller: self)
@@ -36,37 +38,36 @@ class FloatingWindowController: ObservableObject {
         self.window = window
     }
     
+    // 保持签名兼容，但忽略坐标，强制居中
     func toggle(at point: NSPoint) {
         if isVisible {
             hide()
         } else {
-            show(at: point)
+            show()
         }
     }
     
-    func show(at point: NSPoint) {
+    func show() {
         guard let window = window else { return }
         
-        // Calculate position to center the window relative to mouse or just use mouse pos
-        // Let's place it slightly below-right of the mouse cursor
-        window.setFrameOrigin(NSPoint(x: point.x, y: point.y - 320)) // Adjust for height
+        // 核心修复：每次显示都强制居中
+        window.center()
+        
+        // 核心修复：强制激活应用和窗口，确保能接收键盘事件
         window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true) // Activate to receive key events
+        NSApp.activate(ignoringOtherApps: true)
         
         withAnimation {
             isVisible = true
-            isExpanded = true // Always expand when triggered via hotkey
-            window.setContentSize(NSSize(width: 280, height: 400)) // Set expanded size immediately
         }
     }
     
     func hide() {
         withAnimation {
             isVisible = false
-            isExpanded = false
         }
         window?.orderOut(nil)
-        NSApp.hide(nil) // Return focus
+        NSApp.hide(nil) // 隐藏应用以归还焦点
     }
 }
 
@@ -76,13 +77,18 @@ struct FloatingRootView: View {
     @EnvironmentObject var clipboardManager: ClipboardManager
     
     var body: some View {
-        FloatingToolMenu(controller: controller)
-            .frame(width: 280, height: 400)
-            .background(Color.clear)
+        ZStack {
+            // 复用 AcrylicBackground 实现高斯模糊背景
+            AcrylicBackground()
+                .cornerRadius(16) // 圆角
+                .shadow(color: Color.black.opacity(0.3), radius: 20, x: 0, y: 10)
+            
+            FloatingToolMenu(controller: controller)
+        }
+        .frame(width: 320, height: 450)
+        .background(Color.clear)
     }
 }
-
-// Removed FloatingToolIcon as we go straight to menu
 
 struct FloatingToolMenu: View {
     var controller: FloatingWindowController
@@ -104,7 +110,8 @@ struct FloatingToolMenu: View {
             // Header
             HStack {
                 Text("剪贴板历史")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.primary)
                 Spacer()
                 
                 Text("⇅选择 ↵粘贴")
@@ -116,13 +123,13 @@ struct FloatingToolMenu: View {
                 // Close
                 Button(action: { controller.hide() }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary.opacity(0.6))
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary.opacity(0.5))
                 }
                 .buttonStyle(PlainButtonStyle())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
             
             // Search & Clear Row (Synced with ToolsView style)
             HStack(spacing: 8) {
@@ -159,10 +166,10 @@ struct FloatingToolMenu: View {
                 }
                 .buttonStyle(PlainButtonStyle())
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
             
-            Divider().opacity(0.5)
+            Divider().opacity(0.2)
             
             // Clipboard List
             ScrollViewReader { proxy in
@@ -170,13 +177,13 @@ struct FloatingToolMenu: View {
                     if filteredHistory.isEmpty {
                         VStack(spacing: 8) {
                             Image(systemName: "doc.on.clipboard.fill")
-                                .font(.system(size: 24))
+                                .font(.system(size: 32))
                                 .foregroundColor(.secondary.opacity(0.2))
                             Text("暂无记录")
-                                .font(.system(size: 11))
+                                .font(.system(size: 12))
                                 .foregroundColor(.secondary)
                         }
-                        .padding(.top, 60)
+                        .padding(.top, 80)
                         .frame(maxWidth: .infinity)
                     } else {
                         LazyVStack(spacing: 6) {
@@ -188,7 +195,7 @@ struct FloatingToolMenu: View {
                                     }
                             }
                         }
-                        .padding(8)
+                        .padding(12)
                     }
                 }
                 .onChange(of: selectedIndex) { newIndex in
@@ -200,20 +207,13 @@ struct FloatingToolMenu: View {
                 handleKey(key)
             })
         }
-        .background(Color(NSColor.windowBackgroundColor))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
-        )
-        .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
         .onAppear {
             selectedIndex = 0
         }
     }
     
     func handleKey(_ event: NSEvent) {
-        let maxIndex = clipboardManager.history.count - 1
+        let maxIndex = filteredHistory.count - 1 // Fix: Use filteredHistory count
         guard maxIndex >= 0 else { return }
         
         switch event.keyCode {
@@ -222,7 +222,7 @@ struct FloatingToolMenu: View {
         case 125: // Down Arrow
             if selectedIndex < maxIndex { selectedIndex += 1 }
         case 36: // Enter
-            let item = clipboardManager.history[selectedIndex]
+            let item = filteredHistory[selectedIndex] // Fix: Use filteredHistory item
             confirmSelection(item)
         case 53: // Esc
             controller.hide()
@@ -232,7 +232,6 @@ struct FloatingToolMenu: View {
     
     func confirmSelection(_ item: ClipboardItem) {
         controller.hide()
-        // Delay slightly to allow window to hide, matching the ClipboardManager delay logic
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             clipboardManager.pasteToActiveApp(item)
         }
@@ -305,17 +304,17 @@ struct FloatingClipboardRow: View {
         .padding(.vertical, 8)
         .background(
             ZStack {
+                // 如果选中，使用半透明蓝色；否则透明
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(NSColor.windowBackgroundColor).opacity(isSelected ? 0.6 : 1.0))
+                    .fill(isSelected ? Color.blue.opacity(0.1) : Color.clear)
                 
                 if isSelected {
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-                } else {
+                } else if isHovering {
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(colorScheme == .dark ? 0.05 : 0.4), lineWidth: 0.5)
-                        .shadow(color: Color.white.opacity(colorScheme == .dark ? 0.03 : 0.6), radius: 0.5, x: -0.5, y: -0.5)
-                        .shadow(color: Color.black.opacity(0.08), radius: 1, x: 1, y: 1)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                        .background(Color.white.opacity(0.02).cornerRadius(10))
                 }
             }
         )
@@ -350,4 +349,3 @@ struct KeyEventHandlingView: NSViewRepresentable {
         }
     }
 }
-
