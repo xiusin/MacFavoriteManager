@@ -720,21 +720,18 @@ struct ClipboardHistoryToolView: View {
                     }
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 6)
+                .frame(height: 32)
                 .background(NeumorphicInputBackground())
                 
                 Button(action: { manager.clearHistory() }) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color(NSColor.windowBackgroundColor))
-                            .shadow(color: Color.white.opacity(colorScheme == .dark ? 0.05 : 0.8), radius: 1, x: -1, y: -1)
-                            .shadow(color: Color.black.opacity(0.15), radius: 1.5, x: 1.5, y: 1.5)
+                        NeumorphicInputBackground()
                         
                         Image(systemName: "trash")
-                            .foregroundColor(.red.opacity(0.7))
-                            .font(.system(size: 12))
+                            .foregroundColor(.orange.opacity(0.85))
+                            .font(.system(size: 11)) // Smaller icon for refined look
                     }
-                    .frame(width: 28, height: 28)
+                    .frame(width: 32, height: 32)
                 }
                 .buttonStyle(PlainButtonStyle())
                 .help("清空历史记录")

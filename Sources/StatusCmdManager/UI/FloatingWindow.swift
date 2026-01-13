@@ -87,11 +87,17 @@ struct FloatingRootView: View {
 struct FloatingToolMenu: View {
     var controller: FloatingWindowController
     @EnvironmentObject var clipboardManager: ClipboardManager
-    @State private var selectedTab = 0 // 0: Clipboard
-    
-    // Keyboard Selection
+    @State private var searchText = ""
     @State private var selectedIndex: Int = 0
     @Environment(\.colorScheme) var colorScheme
+    
+    var filteredHistory: [ClipboardItem] {
+        if searchText.isEmpty {
+            return clipboardManager.history
+        } else {
+            return clipboardManager.history.filter { $0.text.localizedCaseInsensitiveContains(searchText) }
+        }
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -103,39 +109,92 @@ struct FloatingToolMenu: View {
                 
                 Text("⇅选择 ↵粘贴")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondary.opacity(0.8))
                 
-                Spacer().frame(width: 10)
+                Spacer().frame(width: 8)
                 
                 // Close
                 Button(action: { controller.hide() }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 14))
-                        .foregroundColor(.secondary.opacity(0.8))
+                        .foregroundColor(.secondary.opacity(0.6))
                 }
                 .buttonStyle(PlainButtonStyle())
             }
-            .padding(12)
-            .background(Color(NSColor.windowBackgroundColor))
-            .overlay(Divider(), alignment: .bottom)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            
+            // Search & Clear Row (Synced with ToolsView style)
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                    TextField("搜索...", text: $searchText)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .font(.system(size: 11.5))
+                    
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary.opacity(0.8))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding(.horizontal, 8)
+                .frame(height: 32)
+                .background(NeumorphicInputBackground())
+                
+                Button(action: { clipboardManager.clearHistory() }) {
+                    ZStack {
+                        NeumorphicInputBackground()
+                        
+                        Image(systemName: "trash")
+                            .foregroundColor(.orange.opacity(0.85))
+                            .font(.system(size: 11))
+                    }
+                    .frame(width: 32, height: 32)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+            
+            Divider().opacity(0.5)
             
             // Clipboard List
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 6) {
-                        ForEach(Array(clipboardManager.history.enumerated()), id: \.element.id) { index, item in
-                            FloatingClipboardRow(item: item, isSelected: index == selectedIndex)
-                                .id(index)
-                                .onTapGesture {
-                                    confirmSelection(item)
-                                }
+                    if filteredHistory.isEmpty {
+                        VStack(spacing: 8) {
+                            Image(systemName: "doc.on.clipboard.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(.secondary.opacity(0.2))
+                            Text("暂无记录")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
                         }
+                        .padding(.top, 60)
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        LazyVStack(spacing: 6) {
+                            ForEach(Array(filteredHistory.enumerated()), id: \.element.id) { index, item in
+                                FloatingClipboardRow(item: item, isSelected: index == selectedIndex)
+                                    .id(index)
+                                    .onTapGesture {
+                                        confirmSelection(item)
+                                    }
+                            }
+                        }
+                        .padding(8)
                     }
-                    .padding(8)
                 }
                 .onChange(of: selectedIndex) { newIndex in
                     proxy.scrollTo(newIndex, anchor: .center)
                 }
+                .onChange(of: searchText) { _ in selectedIndex = 0 }
             }
             .background(KeyEventHandlingView { key in
                 handleKey(key)
@@ -149,7 +208,6 @@ struct FloatingToolMenu: View {
         )
         .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
         .onAppear {
-            // Reset selection when window opens
             selectedIndex = 0
         }
     }
