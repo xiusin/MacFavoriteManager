@@ -16,6 +16,8 @@ class HotKeyManager {
     // 更好的方式是使用 Carbon Events，但 swift 中写起来比较繁琐
     
     func startMonitoring() {
+        checkPermissions()
+        
         // 监听 Option + Space
         eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
@@ -29,6 +31,15 @@ class HotKeyManager {
                     }
                 }
             }
+        }
+    }
+    
+    func checkPermissions() {
+        let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String : true]
+        let accessEnabled = AXIsProcessTrustedWithOptions(options)
+        
+        if !accessEnabled {
+            print("需要辅助功能权限来监听全局快捷键")
         }
     }
     

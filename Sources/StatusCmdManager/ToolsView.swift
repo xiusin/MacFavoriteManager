@@ -688,6 +688,7 @@ struct ClipboardHistoryToolView: View {
     @ObservedObject var manager = ClipboardManager.shared
     @State private var searchText = ""
     @State private var selectedIndex: Int = 0
+    @Environment(\.colorScheme) var colorScheme
     
     var filteredHistory: [ClipboardItem] {
         if searchText.isEmpty {
@@ -698,39 +699,64 @@ struct ClipboardHistoryToolView: View {
     }
     
     var body: some View {
-        VStack(spacing: 16) {
-            // Search Bar
+        VStack(spacing: 12) {
+            // Search Bar & Actions
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundColor(.secondary)
-                TextField("搜索历史记录 (⇅选择 ↵粘贴)...", text: $searchText)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .font(.system(size: 13))
-                
-                if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                    TextField("搜索历史记录...", text: $searchText)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .font(.system(size: 11.5))
+                    
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary.opacity(0.8))
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .buttonStyle(PlainButtonStyle())
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(NeumorphicInputBackground())
+                
+                Button(action: { manager.clearHistory() }) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color(NSColor.windowBackgroundColor))
+                            .shadow(color: Color.white.opacity(colorScheme == .dark ? 0.05 : 0.8), radius: 1, x: -1, y: -1)
+                            .shadow(color: Color.black.opacity(0.15), radius: 1.5, x: 1.5, y: 1.5)
+                        
+                        Image(systemName: "trash")
+                            .foregroundColor(.red.opacity(0.7))
+                            .font(.system(size: 12))
+                    }
+                    .frame(width: 28, height: 28)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("清空历史记录")
             }
-            .padding(10)
-            .background(NeumorphicInputBackground())
+            .padding(.horizontal, 2)
             
             // List
             ScrollViewReader { proxy in
                 ScrollView {
                     if filteredHistory.isEmpty {
-                        VStack(spacing: 12) {
+                        VStack(spacing: 8) {
                             Image(systemName: "doc.on.clipboard.fill")
-                                .font(.largeTitle)
-                                .foregroundColor(.secondary.opacity(0.3))
+                                .font(.system(size: 24))
+                                .foregroundColor(.secondary.opacity(0.2))
                             Text("暂无记录")
+                                .font(.system(size: 11))
                                 .foregroundColor(.secondary)
                         }
-                        .padding(.top, 40)
+                        .padding(.top, 60)
                         .frame(maxWidth: .infinity)
                     } else {
-                        LazyVStack(spacing: 10) {
+                        LazyVStack(spacing: 6) { // Tighter spacing per guide
                             ForEach(Array(filteredHistory.enumerated()), id: \.element.id) { index, item in
                                 ClipboardHistoryRow(item: item, isSelected: index == selectedIndex)
                                     .id(index)
@@ -740,6 +766,8 @@ struct ClipboardHistoryToolView: View {
                                     }
                             }
                         }
+                        .padding(.horizontal, 2)
+                        .padding(.bottom, 12)
                     }
                 }
                 .onChange(of: selectedIndex) { newIndex in
@@ -749,6 +777,12 @@ struct ClipboardHistoryToolView: View {
                 }
                 .onChange(of: searchText) { _ in selectedIndex = 0 }
             }
+            
+            // Footer Hint
+            Text("快捷键: ⌥ (Option) + Space 唤出悬浮窗")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary.opacity(0.5))
+                .padding(.bottom, 4)
         }
         .background(
             LocalEventMonitor { event in
@@ -780,29 +814,57 @@ struct ClipboardHistoryToolView: View {
         let isSelected: Bool
         @State private var isHovering = false
         @State private var showCopied = false
+        @Environment(\.colorScheme) var colorScheme
+        
+        // Helper to get app icon
+        func getAppIcon(bundleId: String?) -> NSImage? {
+            guard let bundleId = bundleId,
+                  let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else {
+                return nil
+            }
+            return NSWorkspace.shared.icon(forFile: url.path)
+        }
         
         var body: some View {
-            HStack(alignment: .top, spacing: 12) {
-                // Time
-                Text(timeString(from: item.date))
-                    .font(.caption2)
-                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                    .frame(width: 40, alignment: .leading)
-                    .padding(.top, 2)
+            HStack(alignment: .center, spacing: 12) {
+                // Source App Icon
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.3))
+                    
+                    if let bundleId = item.bundleId, let icon = getAppIcon(bundleId: bundleId) {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .padding(3) // Slightly less padding to make icon look larger
+                    } else {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary.opacity(0.6))
+                    }
+                }
+                .frame(width: 28, height: 28)
                 
                 // Content
-                Text(item.text)
-                    .font(.system(size: 12))
-                    .lineLimit(3)
-                    .foregroundColor(isSelected ? .white : .primary.opacity(0.8))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.text)
+                        .font(.system(size: 11, design: .default))
+                        .lineLimit(2)
+                        .foregroundColor(.primary.opacity(0.85))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.leading)
+                    
+                    Text(timeString(from: item.date))
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
                 
                 // Action
                 if isSelected {
                     Image(systemName: "return")
-                        .font(.caption2)
-                        .foregroundColor(.white.opacity(0.8))
-                } else {
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.blue.opacity(0.6))
+                } else if isHovering {
                     Button(action: {
                         copyToClip(item.text)
                         withAnimation { showCopied = true }
@@ -811,24 +873,36 @@ struct ClipboardHistoryToolView: View {
                         }
                     }) {
                         Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 12))
-                            .foregroundColor(showCopied ? .green : .blue)
-                            .padding(6)
-                            .background(Color.blue.opacity(0.1))
-                            .cornerRadius(6)
+                            .font(.system(size: 10))
+                            .foregroundColor(showCopied ? .green : .secondary.opacity(0.6))
+                            .padding(4)
+                            .background(Circle().fill(Color.secondary.opacity(0.1)))
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .padding(.top, 2)
                 }
             }
-            .padding(10)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isSelected ? Color.blue : Color(NSColor.controlBackgroundColor).opacity(0.5))
-                    .overlay(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(NSColor.windowBackgroundColor).opacity(isSelected ? 0.6 : 1.0))
+                    
+                    if isSelected {
+                        // Subtle highlighted border instead of heavy blue
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(isSelected ? Color.clear : (isHovering ? Color.blue.opacity(0.3) : Color.white.opacity(0.1)), lineWidth: 1)
-                    )
+                            .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                    } else {
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.white.opacity(colorScheme == .dark ? 0.05 : 0.4), lineWidth: 0.5)
+                            .shadow(color: Color.white.opacity(colorScheme == .dark ? 0.03 : 0.6), radius: 0.5, x: -0.5, y: -0.5)
+                            .shadow(color: Color.black.opacity(0.08), radius: 1, x: 1, y: 1)
+                    }
+                }
             )
+            .scaleEffect(isHovering ? 1.005 : 1.0)
+            .animation(.easeOut(duration: 0.2), value: isHovering)
             .onHover { isHovering = $0 }
         }
         

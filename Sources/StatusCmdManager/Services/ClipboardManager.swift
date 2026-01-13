@@ -6,6 +6,8 @@ struct ClipboardItem: Identifiable, Equatable, Codable {
     var id = UUID()
     var text: String
     var date: Date
+    var appName: String?
+    var bundleId: String?
 }
 
 class ClipboardManager: ObservableObject {
@@ -33,13 +35,28 @@ class ClipboardManager: ObservableObject {
             lastChangeCount = pasteboard.changeCount
             
             if let str = pasteboard.string(forType: .string) {
-                // 避免重复保存最近的一条
-                if let last = history.first, last.text == str {
+                // 1. 去除首尾空格和换行
+                let cleanStr = str.trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                // 2. 过滤空内容
+                if cleanStr.isEmpty { return }
+                
+                // 3. 过滤过短的内容（小于4个字符）
+                if cleanStr.count < 4 {
                     return
                 }
                 
-                let newItem = ClipboardItem(text: str, date: Date())
+                // 获取当前前台应用作为来源
+                let frontApp = NSWorkspace.shared.frontmostApplication
+                let appName = frontApp?.localizedName
+                let bundleId = frontApp?.bundleIdentifier
+                
+                let newItem = ClipboardItem(text: cleanStr, date: Date(), appName: appName, bundleId: bundleId)
+                
                 DispatchQueue.main.async {
+                    // 4. 去重：如果存在相同内容，先移除旧的（变相置顶）
+                    self.history.removeAll { $0.text == cleanStr }
+                    
                     self.history.insert(newItem, at: 0)
                     // 限制最大条数
                     if self.history.count > 100 {
@@ -49,6 +66,11 @@ class ClipboardManager: ObservableObject {
                 }
             }
         }
+    }
+    
+    func clearHistory() {
+        history.removeAll()
+        saveHistory()
     }
     
     func copyToClipboard(_ item: ClipboardItem) {
@@ -68,7 +90,7 @@ class ClipboardManager: ObservableObject {
         NSApp.hide(nil)
         
         // 3. Wait a bit for focus to switch, then simulate Cmd+V
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             let source = CGEventSource(stateID: .hidSystemState)
             
             let keyV: CGKeyCode = 9
@@ -94,7 +116,28 @@ class ClipboardManager: ObservableObject {
     private func loadHistory() {
         if let data = UserDefaults.standard.data(forKey: key),
            let decoded = try? JSONDecoder().decode([ClipboardItem].self, from: data) {
-            self.history = decoded
+            
+            // Clean up legacy data: Trim, Filter, and Deduplicate
+            var uniqueText = Set<String>()
+            var cleanedHistory: [ClipboardItem] = []
+            
+            // Process from newest to oldest (assuming decoded is sorted newest first)
+            for item in decoded {
+                let cleanText = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                // Apply new rules to old data
+                if cleanText.count < 4 { continue }
+                
+                if !uniqueText.contains(cleanText) {
+                    uniqueText.insert(cleanText)
+                    // Update the item with the cleaned text just in case
+                    var newItem = item
+                    newItem.text = cleanText
+                    cleanedHistory.append(newItem)
+                }
+            }
+            
+            self.history = cleanedHistory
         }
     }
     

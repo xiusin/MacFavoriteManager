@@ -47,13 +47,16 @@ class FloatingWindowController: ObservableObject {
     func show(at point: NSPoint) {
         guard let window = window else { return }
         
-        window.setFrameOrigin(NSPoint(x: point.x - 30, y: point.y - 30))
+        // Calculate position to center the window relative to mouse or just use mouse pos
+        // Let's place it slightly below-right of the mouse cursor
+        window.setFrameOrigin(NSPoint(x: point.x, y: point.y - 320)) // Adjust for height
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true) // Activate to receive key events
         
         withAnimation {
             isVisible = true
-            isExpanded = false // 初始只显示图标
+            isExpanded = true // Always expand when triggered via hotkey
+            window.setContentSize(NSSize(width: 280, height: 400)) // Set expanded size immediately
         }
     }
     
@@ -73,144 +76,82 @@ struct FloatingRootView: View {
     @EnvironmentObject var clipboardManager: ClipboardManager
     
     var body: some View {
-        ZStack {
-            if controller.isExpanded {
-                FloatingToolMenu(controller: controller)
-                    .transition(.scale(scale: 0.8).combined(with: .opacity))
-            } else {
-                FloatingToolIcon(controller: controller)
-                    .transition(.scale(scale: 0.5).combined(with: .opacity))
-            }
-        }
-        .frame(width: controller.isExpanded ? 240 : 60, height: controller.isExpanded ? 320 : 60)
-        .background(Color.clear)
+        FloatingToolMenu(controller: controller)
+            .frame(width: 280, height: 400)
+            .background(Color.clear)
     }
 }
 
-struct FloatingToolIcon: View {
-    var controller: FloatingWindowController
-    @State private var isHovering = false
-    
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(Color(NSColor.windowBackgroundColor))
-                .shadow(color: Color.black.opacity(0.2), radius: 5, x: 0, y: 2)
-            
-            Image(systemName: "briefcase.fill")
-                .font(.system(size: 24))
-                .foregroundColor(.blue)
-        }
-        .frame(width: 50, height: 50)
-        .scaleEffect(isHovering ? 1.1 : 1.0)
-        .onTapGesture {
-            expandMenu()
-        }
-        .onHover { hover in
-            withAnimation { isHovering = hover }
-        }
-        // Auto expand if triggered via shortcut
-        .onAppear {
-             // Optional: if triggered by shortcut, maybe we want auto-expand?
-             // For now keep manual click or update controller logic
-        }
-    }
-    
-    func expandMenu() {
-        withAnimation(.spring()) {
-            controller.isExpanded = true
-            controller.window?.setContentSize(NSSize(width: 240, height: 320))
-        }
-    }
-}
+// Removed FloatingToolIcon as we go straight to menu
 
 struct FloatingToolMenu: View {
     var controller: FloatingWindowController
     @EnvironmentObject var clipboardManager: ClipboardManager
-    @State private var selectedTab = 0 // 0: Clipboard, 1: Tools
+    @State private var selectedTab = 0 // 0: Clipboard
     
     // Keyboard Selection
     @State private var selectedIndex: Int = 0
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text(selectedTab == 0 ? "剪贴板 (⇅选择 ↵粘贴)" : "工具")
+                Text("剪贴板历史")
                     .font(.system(size: 13, weight: .bold))
                 Spacer()
                 
-                // Toggle Tab
-                Button(action: { withAnimation { selectedTab = selectedTab == 0 ? 1 : 0 } }) {
-                    Image(systemName: selectedTab == 0 ? "square.grid.2x2" : "doc.on.clipboard")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(PlainButtonStyle())
+                Text("⇅选择 ↵粘贴")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
                 
                 Spacer().frame(width: 10)
                 
                 // Close
                 Button(action: { controller.hide() }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary.opacity(0.8))
                 }
                 .buttonStyle(PlainButtonStyle())
             }
             .padding(12)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            .background(Color(NSColor.windowBackgroundColor))
+            .overlay(Divider(), alignment: .bottom)
             
-            Divider()
-            
-            if selectedTab == 0 {
-                // Clipboard List
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 8) {
-                            ForEach(Array(clipboardManager.history.enumerated()), id: \.element.id) { index, item in
-                                ClipboardRow(item: item, isSelected: index == selectedIndex) {
+            // Clipboard List
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 6) {
+                        ForEach(Array(clipboardManager.history.enumerated()), id: \.element.id) { index, item in
+                            FloatingClipboardRow(item: item, isSelected: index == selectedIndex)
+                                .id(index)
+                                .onTapGesture {
                                     confirmSelection(item)
                                 }
-                                .id(index)
-                            }
                         }
-                        .padding(8)
                     }
-                    .onChange(of: selectedIndex) { newIndex in
-                        proxy.scrollTo(newIndex, anchor: .center)
-                    }
+                    .padding(8)
                 }
-                .background(KeyEventHandlingView { key in
-                    handleKey(key)
-                })
-            } else {
-                // Tools List
-                VStack(spacing: 10) {
-                    SimpleToolRow(icon: "character.book.closed.fill", title: "翻译选中文本", color: .orange) {
-                        // TODO: Implement Translation
-                        controller.hide()
-                    }
-                    
-                    SimpleToolRow(icon: "text.viewfinder", title: "屏幕 OCR", color: .purple) {
-                        // TODO: Implement OCR
-                        controller.hide()
-                    }
+                .onChange(of: selectedIndex) { newIndex in
+                    proxy.scrollTo(newIndex, anchor: .center)
                 }
-                .padding(12)
-                Spacer()
             }
+            .background(KeyEventHandlingView { key in
+                handleKey(key)
+            })
         }
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(NSColor.windowBackgroundColor).opacity(0.95))
-        )
+        .background(Color(NSColor.windowBackgroundColor))
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
         )
         .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 5)
+        .onAppear {
+            // Reset selection when window opens
+            selectedIndex = 0
+        }
     }
     
     func handleKey(_ event: NSEvent) {
@@ -233,10 +174,95 @@ struct FloatingToolMenu: View {
     
     func confirmSelection(_ item: ClipboardItem) {
         controller.hide()
-        // Delay slightly to allow window to hide
+        // Delay slightly to allow window to hide, matching the ClipboardManager delay logic
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             clipboardManager.pasteToActiveApp(item)
         }
+    }
+}
+
+struct FloatingClipboardRow: View {
+    let item: ClipboardItem
+    let isSelected: Bool
+    @State private var isHovering = false
+    @Environment(\.colorScheme) var colorScheme
+    
+    // Helper to get app icon
+    func getAppIcon(bundleId: String?) -> NSImage? {
+        guard let bundleId = bundleId,
+              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else {
+            return nil
+        }
+        return NSWorkspace.shared.icon(forFile: url.path)
+    }
+    
+    func timeString(from date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f.string(from: date)
+    }
+    
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            // Source App Icon
+            ZStack {
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.3))
+                
+                if let bundleId = item.bundleId, let icon = getAppIcon(bundleId: bundleId) {
+                    Image(nsImage: icon)
+                        .resizable()
+                            .aspectRatio(contentMode: .fit)
+                        .padding(3)
+                } else {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary.opacity(0.6))
+                }
+            }
+            .frame(width: 28, height: 28)
+            
+            // Content
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.text)
+                    .font(.system(size: 11.5))
+                    .lineLimit(2)
+                    .foregroundColor(.primary.opacity(0.85))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .multilineTextAlignment(.leading)
+                
+                Text(timeString(from: item.date))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.5))
+            }
+            
+            // Action
+            if isSelected {
+                Image(systemName: "return")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.blue.opacity(0.6))
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(NSColor.windowBackgroundColor).opacity(isSelected ? 0.6 : 1.0))
+                
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                } else {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(colorScheme == .dark ? 0.05 : 0.4), lineWidth: 0.5)
+                        .shadow(color: Color.white.opacity(colorScheme == .dark ? 0.03 : 0.6), radius: 0.5, x: -0.5, y: -0.5)
+                        .shadow(color: Color.black.opacity(0.08), radius: 1, x: 1, y: 1)
+                }
+            }
+        )
+        .scaleEffect(isHovering ? 1.005 : 1.0)
+        .onHover { isHovering = $0 }
     }
 }
 
@@ -267,59 +293,3 @@ struct KeyEventHandlingView: NSViewRepresentable {
     }
 }
 
-struct ClipboardRow: View {
-    let item: ClipboardItem
-    let isSelected: Bool
-    let action: () -> Void
-    @State private var isHovering = false
-    
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                Text(item.text)
-                    .lineLimit(2)
-                    .font(.system(size: 11))
-                    .foregroundColor(isSelected ? .white : .primary)
-                Spacer()
-                if isSelected {
-                    Image(systemName: "return")
-                        .font(.caption2)
-                        .foregroundColor(.white.opacity(0.8))
-                }
-            }
-            .padding(8)
-            .background(isSelected ? Color.blue : (isHovering ? Color.blue.opacity(0.1) : Color.clear))
-            .cornerRadius(6)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .onHover { isHovering = $0 }
-    }
-}
-
-struct SimpleToolRow: View {
-    let icon: String
-    let title: String
-    let color: Color
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(color.opacity(0.1))
-                        .frame(width: 32, height: 32)
-                    Image(systemName: icon)
-                        .foregroundColor(color)
-                        .font(.system(size: 14))
-                }
-                Text(title).font(.system(size: 12))
-                Spacer()
-            }
-            .padding(8)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(8)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
