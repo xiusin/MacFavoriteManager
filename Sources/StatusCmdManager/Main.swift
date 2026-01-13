@@ -50,6 +50,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             FloatingWindowController.shared.toggle(at: mouseLoc)
         }
         HotKeyManager.shared.startMonitoring()
+        
+        // 5. 初始化侧边记事本 (Side Note)
+        _ = SideNoteWindowController.shared
     }
     
     @objc func togglePopover(_ sender: AnyObject?) {

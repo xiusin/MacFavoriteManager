@@ -1,6 +1,14 @@
 import SwiftUI
 import Combine
 
+struct NoteItem: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var content: String
+    var isCompleted: Bool = false
+    var createdAt: Date = Date()
+    var color: String = "blue" // blue, red, orange, green, purple
+}
+
 class AppViewModel: ObservableObject {
     @Published var commands: [CommandItem] = []
     @Published var commandStates: [UUID: Bool] = [:]
@@ -16,13 +24,18 @@ class AppViewModel: ObservableObject {
     @Published var isFetchingMetadata: Bool = false
     @Published var isBookmarkGridView: Bool = true
     
+    // Note State
+    @Published var notes: [NoteItem] = []
+    
     private let storageKey = "UserCommands_v1"
     private let bookmarkKey = "UserBookmarks_v1"
+    private let noteKey = "UserNotes_v1"
     private let viewModeKey = "isBookmarkGridView"
     
     init() {
         loadCommands()
         loadBookmarks()
+        loadNotes()
         self.isBookmarkGridView = UserDefaults.standard.object(forKey: viewModeKey) as? Bool ?? true
         setupCloudSync()
     }
@@ -46,6 +59,7 @@ class AppViewModel: ObservableObject {
         print("iCloud Data Changed, updating...")
         loadCommands()
         loadBookmarks()
+        loadNotes()
     }
     
     func saveViewMode() {
@@ -83,6 +97,19 @@ class AppViewModel: ObservableObject {
         }
     }
     
+    func loadNotes() {
+        let cloudData = NSUbiquitousKeyValueStore.default.data(forKey: noteKey)
+        let localData = UserDefaults.standard.data(forKey: noteKey)
+        
+        if let data = cloudData ?? localData,
+           let decoded = try? JSONDecoder().decode([NoteItem].self, from: data) {
+            self.notes = decoded
+        } else {
+            // Default Welcome Note
+            self.notes = [NoteItem(content: "欢迎使用侧边记事本！鼠标触碰屏幕右侧边缘即可唤出。", color: "blue")]
+        }
+    }
+    
     func saveCommands() {
         if let encoded = try? JSONEncoder().encode(commands) {
             UserDefaults.standard.set(encoded, forKey: storageKey)
@@ -96,6 +123,33 @@ class AppViewModel: ObservableObject {
             UserDefaults.standard.set(encoded, forKey: bookmarkKey)
             NSUbiquitousKeyValueStore.default.set(encoded, forKey: bookmarkKey)
             NSUbiquitousKeyValueStore.default.synchronize()
+        }
+    }
+    
+    func saveNotes() {
+        if let encoded = try? JSONEncoder().encode(notes) {
+            UserDefaults.standard.set(encoded, forKey: noteKey)
+            NSUbiquitousKeyValueStore.default.set(encoded, forKey: noteKey)
+            NSUbiquitousKeyValueStore.default.synchronize()
+        }
+    }
+    
+    // MARK: - Note Management
+    func addNote(content: String, color: String = "blue") {
+        let newNote = NoteItem(content: content, color: color)
+        notes.insert(newNote, at: 0)
+        saveNotes()
+    }
+    
+    func deleteNote(id: UUID) {
+        notes.removeAll { $0.id == id }
+        saveNotes()
+    }
+    
+    func updateNote(_ note: NoteItem) {
+        if let index = notes.firstIndex(where: { $0.id == note.id }) {
+            notes[index] = note
+            saveNotes()
         }
     }
     

@@ -173,7 +173,7 @@ struct FloatingToolMenu: View {
             
             // Clipboard List
             ScrollViewReader { proxy in
-                ScrollView {
+                ScrollView(showsIndicators: false) { // Hide scroll indicators
                     if filteredHistory.isEmpty {
                         VStack(spacing: 8) {
                             Image(systemName: "doc.on.clipboard.fill")

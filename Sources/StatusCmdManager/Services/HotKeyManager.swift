@@ -47,6 +47,12 @@ class HotKeyManager {
     
     /// 辅助功能权限检查：如果未授权，会触发 macOS 系统弹窗提示用户前往设置开启
     func checkPermissions() {
+        // 先静默检查，如果已经有权限，就不弹窗
+        if AXIsProcessTrusted() {
+            return
+        }
+        
+        // 没有权限，则带 Prompt 选项再次调用以触发弹窗
         let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String : true]
         let accessEnabled = AXIsProcessTrustedWithOptions(options)
         
