@@ -204,7 +204,7 @@ struct AIChatRootView: View {
             // Settings Overlay
             if showSettings {
                 ZStack {
-                    Color.black.opacity(0.2).edgesIgnoringSafeArea(.all)
+                    Color.black.opacity(0.1).edgesIgnoringSafeArea(.all)
                         .onTapGesture { withAnimation { showSettings = false } }
                         .transition(.opacity)
                     

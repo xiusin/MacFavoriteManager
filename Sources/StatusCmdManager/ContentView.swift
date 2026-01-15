@@ -207,10 +207,14 @@ struct ContentView: View {
             ).transition(AnyTransition.move(edge: .leading))
         } else if case let .editor(item) = route {
             CommandEditView(viewModel: viewModel, item: item, onDismiss: { withAnimation { route = .list } })
-                .transition(AnyTransition.move(edge: .trailing)).zIndex(1).background(Color(NSColor.windowBackgroundColor))
+                .background(AcrylicBackground())
+                .transition(AnyTransition.move(edge: .trailing))
+                .zIndex(1)
         } else if case .brewManager = route {
             BrewManagerView(viewModel: viewModel, onDismiss: { withAnimation { route = .list } })
-                .transition(AnyTransition.move(edge: .trailing)).zIndex(1).background(Color(NSColor.windowBackgroundColor))
+                .background(AcrylicBackground())
+                .transition(AnyTransition.move(edge: .trailing))
+                .zIndex(1)
         }
     }
     
@@ -218,7 +222,7 @@ struct ContentView: View {
     private var overlayViews: some View {
         if showAddBookmark || bookmarkToEdit != nil {
             ZStack {
-                Color.black.opacity(0.3).edgesIgnoringSafeArea(.all).onTapGesture { showAddBookmark = false; bookmarkToEdit = nil }
+                Color.black.opacity(0.1).edgesIgnoringSafeArea(.all).onTapGesture { showAddBookmark = false; bookmarkToEdit = nil }
                 AddBookmarkDialog(
                     viewModel: viewModel,
                     initialUrl: bookmarkToEdit?.url ?? newBookmarkUrl,
@@ -546,5 +550,4 @@ struct IconPicker: View {
         }
     }
 }
-
 
