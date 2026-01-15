@@ -24,25 +24,22 @@ struct BrewManagerView: View {
                 
                 Spacer()
                 
-                // Neumorphic Segmented Control
+                // Segmented Control
                 HStack(spacing: 0) {
                     SegmentButton(title: "我的服务", isSelected: selectedTab == 0) { selectedTab = 0 }
                     SegmentButton(title: "服务库", isSelected: selectedTab == 1) { selectedTab = 1 }
                 }
                 .padding(2)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
-                        )
+                    Capsule()
+                        .fill(Color.black.opacity(0.05))
+                        .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
                 )
                 
                 Spacer()
                 
                 // Refresh Button
-                NeumorphicIconButton(icon: "arrow.clockwise", color: .blue) {
+                LiquidIconButton(icon: "arrow.clockwise", color: .blue) {
                     if selectedTab == 0 { viewModel.refreshBrewServices() }
                     else { if !viewModel.searchQuery.isEmpty { viewModel.searchBrew() } else { viewModel.refreshBrewServices() } }
                 }
@@ -52,7 +49,7 @@ struct BrewManagerView: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
-            .modifier(GlassPaneModifier())
+            .modifier(LiquidGlassPaneModifier())
             
             // Content
             if selectedTab == 0 {
@@ -64,7 +61,7 @@ struct BrewManagerView: View {
         .onAppear {
             viewModel.refreshBrewServices()
         }
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(AcrylicBackground())
     }
     
     struct SegmentButton: View {
@@ -75,14 +72,18 @@ struct BrewManagerView: View {
         var body: some View {
             Button(action: action) {
                 Text(title)
-                    .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .medium))
                     .foregroundColor(isSelected ? .primary : .secondary)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 6)
                     .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(isSelected ? Color(NSColor.windowBackgroundColor) : Color.clear)
-                            .shadow(color: Color.black.opacity(isSelected ? 0.1 : 0), radius: 2, x: 0, y: 1)
+                        ZStack {
+                            if isSelected {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.white.opacity(0.2))
+                                    .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                            }
+                        }
                     )
             }
             .buttonStyle(PlainButtonStyle())
@@ -122,9 +123,6 @@ struct MyServicesView: View {
 // MARK: - Store Tab
 struct ServiceStoreView: View {
     @ObservedObject var viewModel: AppViewModel
-    
-    // De-bounce search
-    let searchPublisher = PassthroughSubject<String, Never>()
     
     var displayList: [String] {
         if viewModel.searchQuery.isEmpty {
@@ -202,17 +200,11 @@ struct StoreItemRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Icon Container
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.6))
-                    .shadow(color: Color.white.opacity(colorScheme == .dark ? 0.05 : 0.6), radius: 1, x: -1, y: -1)
-                    .shadow(color: Color.black.opacity(0.1), radius: 1, x: 1, y: 1)
-                
+            LiquidIconContainer(size: 36) {
                 Image(systemName: icon)
                     .font(.system(size: 16))
                     .foregroundColor(.secondary)
             }
-            .frame(width: 36, height: 36)
             
             Text(name)
                 .font(.system(size: 13, weight: .medium))
@@ -230,10 +222,10 @@ struct StoreItemRow: View {
                         .padding(.vertical, 6)
                         .background(
                             ZStack {
-                                RoundedRectangle(cornerRadius: 14)
-                                    .fill(Color(NSColor.controlBackgroundColor))
-                                    .shadow(color: Color.white.opacity(0.5), radius: 1, x: -1, y: -1)
-                                    .shadow(color: Color.black.opacity(0.1), radius: 1, x: 1, y: 1)
+                                Capsule()
+                                    .fill(Color.red.opacity(0.1))
+                                Capsule()
+                                    .stroke(Color.red.opacity(0.2), lineWidth: 0.5)
                             }
                         )
                         .foregroundColor(.red.opacity(0.8))
@@ -249,9 +241,10 @@ struct StoreItemRow: View {
                         .padding(.vertical, 6)
                         .background(
                             ZStack {
-                                RoundedRectangle(cornerRadius: 14)
-                                    .fill(Color.blue)
-                                    .shadow(color: Color.blue.opacity(0.3), radius: 2, x: 0, y: 2)
+                                Capsule()
+                                    .fill(Color.blue.opacity(0.8))
+                                Capsule()
+                                    .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
                             }
                         )
                         .foregroundColor(.white)
@@ -261,11 +254,18 @@ struct StoreItemRow: View {
         }
         .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(NSColor.windowBackgroundColor))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.white.opacity(0.5), Color.white.opacity(0.1)]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.5
+                        )
                 )
         )
     }
@@ -290,10 +290,9 @@ struct BrewServiceRow: View {
             // Status Dot
             ZStack {
                 Circle()
-                    .fill(Color(NSColor.controlBackgroundColor))
+                    .fill(Color.white.opacity(0.1))
                     .frame(width: 14, height: 14)
-                    .shadow(color: Color.white.opacity(0.5), radius: 1, x: -0.5, y: -0.5)
-                    .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0.5, y: 0.5)
+                    .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 0.5))
                 
                 Circle()
                     .fill(statusColor)
@@ -325,19 +324,25 @@ struct BrewServiceRow: View {
             
             // Actions
             HStack(spacing: 12) {
-                // Uninstall (danger)
-                NeumorphicActionButton(icon: "trash", color: .red.opacity(0.8)) {
+                LiquidActionButton(icon: "trash", color: .red.opacity(0.8)) {
                     viewModel.uninstallBrewService(service)
                 }
             }
         }
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(NSColor.windowBackgroundColor))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.white.opacity(0.5), Color.white.opacity(0.1)]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.5
+                        )
                 )
         )
     }

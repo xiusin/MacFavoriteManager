@@ -151,14 +151,13 @@ struct ToolGridItem: View {
             VStack(alignment: .center, spacing: 8) {
                 // Icon Box
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                        .shadow(color: Color.white.opacity(colorScheme == .dark ? 0.05 : 0.8), radius: 1, x: -1, y: -1)
-                        .shadow(color: Color.black.opacity(0.1), radius: 1, x: 1, y: 1)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(tool.color.opacity(0.1))
+                        .shadow(color: tool.color.opacity(0.1), radius: 5, x: 0, y: 2)
                     
                     Image(systemName: tool.icon)
                         .font(.system(size: 16))
-                        .foregroundColor(tool.color)
+                        .foregroundColor(tool.color.opacity(0.9))
                 }
                 .frame(width: 36, height: 36)
                 
@@ -168,23 +167,30 @@ struct ToolGridItem: View {
                         .foregroundColor(.primary.opacity(0.9))
                     Text(tool.description)
                         .font(.system(size: 9))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondary.opacity(0.7))
                         .lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .padding(.horizontal, 4)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 6)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(NSColor.windowBackgroundColor))
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(isHovering ? tool.color.opacity(0.3) : Color.white.opacity(0.1), lineWidth: isHovering ? 1 : 0.5)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.white.opacity(0.3), Color.white.opacity(0.05)]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 0.5
+                            )
                     )
-                    .shadow(color: Color.black.opacity(isHovering ? 0.15 : 0.05), radius: isHovering ? 4 : 2, x: 0, y: isHovering ? 2 : 1)
+                    .shadow(color: Color.black.opacity(isHovering ? 0.1 : 0.05), radius: isHovering ? 6 : 2, x: 0, y: isHovering ? 3 : 1)
             )
-            .scaleEffect(isHovering ? 1.05 : 1.0)
+            .scaleEffect(isHovering ? 1.03 : 1.0)
         }
         .buttonStyle(PlainButtonStyle())
         .onHover { isHovering = $0 }
@@ -206,20 +212,20 @@ struct ToolDetailContainer: View {
                         Text(tool.rawValue)
                             .font(.system(size: 13, weight: .bold))
                     }
-                    .foregroundColor(.primary)
+                    .foregroundColor(.primary.opacity(0.8))
                 }
                 .buttonStyle(PlainButtonStyle())
                 
                 Spacer()
                 
                 Image(systemName: tool.icon)
-                    .foregroundColor(tool.color)
+                    .foregroundColor(tool.color.opacity(0.8))
                     .font(.system(size: 14))
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Color(NSColor.windowBackgroundColor).opacity(0.95))
-            .overlay(Divider(), alignment: .bottom)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
+            .overlay(Divider().opacity(0.1), alignment: .bottom)
             
             // Tool Content
             ScrollView {
@@ -233,12 +239,12 @@ struct ToolDetailContainer: View {
                     case .encoder: EncoderDecoderView()
                     }
                 }
-                .padding(16)
+                .padding(20)
             }
         }
-        .background(Color(NSColor.windowBackgroundColor))
-        .cornerRadius(0) // Full screen usually implies no extra roundness or matches window
-        .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: -2)
+        .background(AcrylicBackground())
+        .cornerRadius(0) 
+        .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: -5)
     }
 }
 
@@ -263,7 +269,7 @@ struct TimestampToolView: View {
                 HStack {
                     Text("\(Int(now.timeIntervalSince1970))")
                         .font(.system(size: 24, weight: .bold, design: .monospaced))
-                        .foregroundColor(.blue)
+                        .foregroundColor(.blue.opacity(0.9))
                     Button(action: { copyToClip("\(Int(now.timeIntervalSince1970))") }) {
                         Image(systemName: "doc.on.doc").foregroundColor(.secondary)
                     }.buttonStyle(PlainButtonStyle())
@@ -274,25 +280,25 @@ struct TimestampToolView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity)
-            .background(NeumorphicInputBackground())
+            .background(LiquidInputBackground())
             .onReceive(timer) { _ in now = Date() }
             
-            Divider().opacity(0.5)
+            Divider().opacity(0.1)
             
             // Convert
             VStack(alignment: .center, spacing: 20) {
                 HStack(alignment: .bottom, spacing: 12) {
-                    NeumorphicTextField(icon: "clock.arrow.circlepath", title: "Unix 时间戳", text: $inputTs, placeholder: "167...")
+                    LiquidTextField(icon: "clock.arrow.circlepath", title: "Unix 时间戳", text: $inputTs, placeholder: "167...")
                     
                     Button(action: convertTimestamp) {
                         Image(systemName: "arrow.right.circle.fill")
-                            .font(.system(size: 20))
+                            .font(.system(size: 24))
                             .foregroundColor(.white)
-                            .padding(10)
-                            .background(Circle().fill(Color.blue).shadow(color: Color.blue.opacity(0.3), radius: 3, y: 2))
+                            .padding(8)
+                            .background(Circle().fill(Color.blue.opacity(0.8)).shadow(color: Color.blue.opacity(0.3), radius: 3, y: 2))
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .padding(.bottom, 2) // Micro adjustment for visual center
+                    .padding(.bottom, 2)
                 }
                 
                 // Flip Card Result
@@ -355,7 +361,7 @@ struct TimestampToolView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(NeumorphicInputBackground())
+            .background(LiquidInputBackground())
         }
     }
 }
@@ -373,7 +379,7 @@ struct JsonTreeViewWrapper: View {
                 TextEditor(text: $input)
                     .font(.system(.caption, design: .monospaced))
                     .padding(4)
-                    .background(NeumorphicInputBackground())
+                    .background(LiquidInputBackground())
                     .frame(height: 240) // Increased for better multi-line input
             }
             
@@ -381,7 +387,7 @@ struct JsonTreeViewWrapper: View {
                 Button(action: parseJson) {
                     Text("解析预览")
                 }
-                .buttonStyle(NeumorphicPillButtonStyle())
+                .buttonStyle(LiquidPillButtonStyle())
                 
                 if jsonObject != nil {
                     Button(action: openDetailWindow) {
@@ -390,7 +396,7 @@ struct JsonTreeViewWrapper: View {
                             Text("全屏查看")
                         }
                     }
-                    .buttonStyle(NeumorphicPillButtonStyle())
+                    .buttonStyle(LiquidPillButtonStyle())
                 }
             }
             
@@ -406,7 +412,7 @@ struct JsonTreeViewWrapper: View {
                             .padding(8)
                     }
                     .frame(height: 200)
-                    .background(NeumorphicInputBackground())
+                    .background(LiquidInputBackground())
                 }
             }
         }
@@ -456,7 +462,7 @@ struct JsonNodeView: View {
                 if !isContainer {
                     Text("\(String(describing: value))")
                         .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(.blue)
+                        .foregroundColor(.blue.opacity(0.8))
                         .lineLimit(1)
                 } else {
                     Text(typeDescription)
@@ -494,18 +500,7 @@ struct JsonNodeView: View {
     }
 }
 
-struct NeumorphicPillButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .bold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(Color.blue))
-            .shadow(color: Color.blue.opacity(0.3), radius: 2, y: 1)
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-    }
-}
+// MARK: - Reusable styles replaced by global definitions
 
 // 2. Password Generator
 struct PasswordGeneratorView: View {
@@ -526,10 +521,10 @@ struct PasswordGeneratorView: View {
                 
                 Button(action: { copyToClip(password) }) {
                     Image(systemName: "doc.on.doc")
-                }.buttonStyle(NeumorphicIconButtonStyle())
+                }.buttonStyle(LiquidIconButtonStyle())
             }
             .padding(16)
-            .background(NeumorphicInputBackground())
+            .background(LiquidInputBackground())
             
             // Controls
             VStack(spacing: 20) {
@@ -549,7 +544,7 @@ struct PasswordGeneratorView: View {
                 
                 Button(action: generatePassword) {
                     Text("生成密码")
-                }.buttonStyle(NeumorphicPillButtonStyle())
+                }.buttonStyle(LiquidPillButtonStyle())
             }
         }
         .onAppear(perform: generatePassword)
@@ -586,7 +581,7 @@ struct HashCalculatorView: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            NeumorphicTextField(icon: "text.quote", title: "输入文本", text: $input, placeholder: "Type something...")
+            LiquidTextField(icon: "text.quote", title: "输入文本", text: $input, placeholder: "Type something...")
             
             ResultRow(title: "MD5", value: input.isEmpty ? "" : md5)
             ResultRow(title: "SHA256", value: input.isEmpty ? "" : sha256)
@@ -613,7 +608,7 @@ struct HashCalculatorView: View {
                     }
                 }
                 .padding(12)
-                .background(NeumorphicInputBackground())
+                .background(LiquidInputBackground())
             }
         }
     }
@@ -633,11 +628,11 @@ struct EncoderDecoderView: View {
             }
             .pickerStyle(SegmentedPickerStyle())
             
-            NeumorphicTextField(icon: "arrow.right", title: "输入", text: $input, placeholder: "Raw text")
+            LiquidTextField(icon: "arrow.right", title: "输入", text: $input, placeholder: "Raw text")
             
             HStack(spacing: 20) {
-                Button(action: encode) { Text("编码 (Encode)") }.buttonStyle(NeumorphicPillButtonStyle())
-                Button(action: decode) { Text("解码 (Decode)") }.buttonStyle(NeumorphicPillButtonStyle())
+                Button(action: encode) { Text("编码 (Encode)") }.buttonStyle(LiquidPillButtonStyle())
+                Button(action: decode) { Text("解码 (Decode)") }.buttonStyle(LiquidPillButtonStyle())
             }
             
             VStack(alignment: .leading, spacing: 6) {
@@ -651,11 +646,11 @@ struct EncoderDecoderView: View {
                     if !output.isEmpty {
                         Button(action: { copyToClip(output) }) {
                             Image(systemName: "doc.on.doc")
-                        }.buttonStyle(NeumorphicIconButtonStyle())
+                        }.buttonStyle(LiquidIconButtonStyle())
                     }
                 }
                 .padding(12)
-                .background(NeumorphicInputBackground())
+                .background(LiquidInputBackground())
             }
         }
     }
@@ -686,10 +681,10 @@ func copyToClip(_ text: String) {
     p.setString(text, forType: .string)
 }
 
-struct NeumorphicIconButtonStyle: ButtonStyle {
+struct LiquidIconButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundColor(.blue)
+            .foregroundColor(.blue.opacity(0.8))
             .padding(6)
             .background(configuration.isPressed ? Color.blue.opacity(0.1) : Color.clear)
             .cornerRadius(6)
@@ -734,15 +729,15 @@ struct ClipboardHistoryToolView: View {
                 }
                 .padding(.horizontal, 8)
                 .frame(height: 32)
-                .background(NeumorphicInputBackground())
+                .background(LiquidInputBackground())
                 
                 Button(action: { manager.clearHistory() }) {
                     ZStack {
-                        NeumorphicInputBackground()
+                        LiquidInputBackground()
                         
                         Image(systemName: "trash")
                             .foregroundColor(.orange.opacity(0.85))
-                            .font(.system(size: 11)) // Smaller icon for refined look
+                            .font(.system(size: 11))
                     }
                     .frame(width: 32, height: 32)
                 }
@@ -766,7 +761,7 @@ struct ClipboardHistoryToolView: View {
                         .padding(.top, 60)
                         .frame(maxWidth: .infinity)
                     } else {
-                        LazyVStack(spacing: 6) { // Tighter spacing per guide
+                        LazyVStack(spacing: 6) {
                             ForEach(Array(filteredHistory.enumerated()), id: \.element.id) { index, item in
                                 ClipboardHistoryRow(item: item, isSelected: index == selectedIndex)
                                     .id(index)
@@ -839,14 +834,14 @@ struct ClipboardHistoryToolView: View {
             HStack(alignment: .center, spacing: 12) {
                 // Source App Icon
                 ZStack {
-                    RoundedRectangle(cornerRadius: 7)
+                    RoundedRectangle(cornerRadius: 8)
                         .fill(Color(NSColor.controlBackgroundColor).opacity(0.3))
                     
                     if let bundleId = item.bundleId, let icon = getAppIcon(bundleId: bundleId) {
                         Image(nsImage: icon)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .padding(3) // Slightly less padding to make icon look larger
+                            .padding(3)
                     } else {
                         Image(systemName: "doc.text")
                             .font(.system(size: 11))
@@ -896,18 +891,20 @@ struct ClipboardHistoryToolView: View {
             .padding(.vertical, 8)
             .background(
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(NSColor.windowBackgroundColor).opacity(isSelected ? 0.6 : 1.0))
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.blue.opacity(0.1))
+                    } else {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                    }
                     
                     if isSelected {
-                        // Subtle highlighted border instead of heavy blue
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(Color.blue.opacity(0.3), lineWidth: 1)
                     } else {
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.white.opacity(colorScheme == .dark ? 0.05 : 0.4), lineWidth: 0.5)
-                            .shadow(color: Color.white.opacity(colorScheme == .dark ? 0.03 : 0.6), radius: 0.5, x: -0.5, y: -0.5)
-                            .shadow(color: Color.black.opacity(0.08), radius: 1, x: 1, y: 1)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                     }
                 }
             )
@@ -924,3 +921,34 @@ struct ClipboardHistoryToolView: View {
     }
 }
 
+// MARK: - Reusable Liquid Components for Tools
+
+struct LiquidInputBackground: View {
+    @Environment(\.colorScheme) var colorScheme
+    var body: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(Color.black.opacity(0.05))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+    }
+}
+
+struct LiquidTextField: View {
+    let icon: String
+    let title: String
+    @Binding var text: String
+    var placeholder: String
+    var isCode: Bool = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased()).font(.system(size: 10, weight: .bold)).foregroundColor(.secondary.opacity(0.6)).padding(.leading, 4)
+            HStack(spacing: 10) {
+                Image(systemName: icon).foregroundColor(.secondary.opacity(0.5)).font(.system(size: 13)).frame(width: 18)
+                TextField(placeholder, text: $text)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .font(isCode ? .system(.caption, design: .monospaced) : .system(.body))
+            }
+            .padding(12)
+            .background(LiquidInputBackground())
+        }
+    }
+}

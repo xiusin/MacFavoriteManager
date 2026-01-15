@@ -92,10 +92,14 @@ struct FloatingRootView: View {
     
     var body: some View {
         ZStack {
-            // 复用 AcrylicBackground 实现高斯模糊背景
+            // Liquid Glass Background
             AcrylicBackground()
-                .cornerRadius(16) // 圆角
-                .shadow(color: Color.black.opacity(0.3), radius: 20, x: 0, y: 10)
+                .cornerRadius(20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.3), radius: 25, x: 0, y: 15)
             
             FloatingToolMenu(controller: controller)
         }
@@ -125,12 +129,12 @@ struct FloatingToolMenu: View {
             HStack {
                 Text("剪贴板历史")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.primary.opacity(0.9))
                 Spacer()
                 
                 Text("⇅选择 ↵粘贴")
                     .font(.caption2)
-                    .foregroundColor(.secondary.opacity(0.8))
+                    .foregroundColor(.secondary.opacity(0.6))
                 
                 Spacer().frame(width: 8)
                 
@@ -138,19 +142,19 @@ struct FloatingToolMenu: View {
                 Button(action: { controller.hide() }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 16))
-                        .foregroundColor(.secondary.opacity(0.5))
+                        .foregroundColor(.secondary.opacity(0.4))
                 }
                 .buttonStyle(PlainButtonStyle())
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             
-            // Search & Clear Row (Synced with ToolsView style)
+            // Search & Clear Row
             HStack(spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.secondary.opacity(0.7))
                     TextField("搜索...", text: $searchText)
                         .textFieldStyle(PlainTextFieldStyle())
                         .font(.system(size: 11.5))
@@ -159,21 +163,27 @@ struct FloatingToolMenu: View {
                         Button(action: { searchText = "" }) {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 11))
-                                .foregroundColor(.secondary.opacity(0.8))
+                                .foregroundColor(.secondary.opacity(0.6))
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10)
                 .frame(height: 32)
-                .background(NeumorphicInputBackground())
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.black.opacity(0.05))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+                )
                 
                 Button(action: { clipboardManager.clearHistory() }) {
                     ZStack {
-                        NeumorphicInputBackground()
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.black.opacity(0.05))
+                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 0.5))
                         
                         Image(systemName: "trash")
-                            .foregroundColor(.orange.opacity(0.85))
+                            .foregroundColor(.orange.opacity(0.8))
                             .font(.system(size: 11))
                     }
                     .frame(width: 32, height: 32)
@@ -183,11 +193,11 @@ struct FloatingToolMenu: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 12)
             
-            Divider().opacity(0.2)
+            Divider().opacity(0.05)
             
             // Clipboard List
             ScrollViewReader { proxy in
-                ScrollView(showsIndicators: false) { // Hide scroll indicators
+                ScrollView(showsIndicators: false) {
                     if filteredHistory.isEmpty {
                         VStack(spacing: 8) {
                             Image(systemName: "doc.on.clipboard.fill")
@@ -195,7 +205,7 @@ struct FloatingToolMenu: View {
                                 .foregroundColor(.secondary.opacity(0.2))
                             Text("暂无记录")
                                 .font(.system(size: 12))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.secondary.opacity(0.6))
                         }
                         .padding(.top, 80)
                         .frame(maxWidth: .infinity)
@@ -227,7 +237,7 @@ struct FloatingToolMenu: View {
     }
     
     func handleKey(_ event: NSEvent) {
-        let maxIndex = filteredHistory.count - 1 // Fix: Use filteredHistory count
+        let maxIndex = filteredHistory.count - 1
         guard maxIndex >= 0 else { return }
         
         switch event.keyCode {
@@ -236,7 +246,7 @@ struct FloatingToolMenu: View {
         case 125: // Down Arrow
             if selectedIndex < maxIndex { selectedIndex += 1 }
         case 36: // Enter
-            let item = filteredHistory[selectedIndex] // Fix: Use filteredHistory item
+            let item = filteredHistory[selectedIndex]
             confirmSelection(item)
         case 53: // Esc
             controller.hide()
@@ -277,7 +287,7 @@ struct FloatingClipboardRow: View {
         HStack(alignment: .center, spacing: 10) {
             // Source App Icon
             ZStack {
-                RoundedRectangle(cornerRadius: 7)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color(NSColor.controlBackgroundColor).opacity(0.3))
                 
                 if let bundleId = item.bundleId, let icon = getAppIcon(bundleId: bundleId) {
@@ -318,17 +328,20 @@ struct FloatingClipboardRow: View {
         .padding(.vertical, 8)
         .background(
             ZStack {
-                // 如果选中，使用半透明蓝色；否则透明
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isSelected ? Color.blue.opacity(0.1) : Color.clear)
-                
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-                } else if isHovering {
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
-                        .background(Color.white.opacity(0.02).cornerRadius(10))
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.blue.opacity(0.1))
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.blue.opacity(0.3), lineWidth: 0.5)
+                } else {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .opacity(isHovering ? 1 : 0)
+                    
+                    if isHovering {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                    }
                 }
             }
         )

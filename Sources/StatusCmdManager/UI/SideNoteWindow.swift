@@ -143,10 +143,14 @@ struct SideNoteView: View {
     
     var body: some View {
         ZStack {
-            // Background - Using standard cornerRadius which is reliable
+            // Background - Liquid Glass Style
             AcrylicBackground()
-                .cornerRadius(16)
-                .shadow(color: Color.black.opacity(0.2), radius: 10, x: -5, y: 0)
+                .cornerRadius(20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.2), radius: 15, x: -5, y: 5)
             
             if isAddingNote {
                 NoteEditorView(
@@ -169,17 +173,20 @@ struct SideNoteView: View {
                     HStack {
                         Text("速记")
                             .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.primary)
+                            .foregroundColor(.primary.opacity(0.9))
                         Spacer()
                         
                         // Add Button
                         Button(action: { withAnimation(.spring()) { isAddingNote = true } }) {
-                            Image(systemName: "square.and.pencil")
-                                .font(.system(size: 18))
-                                .foregroundColor(.blue)
-                                .padding(6)
-                                .background(Color.blue.opacity(0.1))
-                                .clipShape(Circle())
+                            ZStack {
+                                Circle()
+                                    .fill(Color.blue.opacity(0.1))
+                                Image(systemName: "square.and.pencil")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.blue.opacity(0.9))
+                            }
+                            .frame(width: 32, height: 32)
+                            .overlay(Circle().stroke(Color.blue.opacity(0.2), lineWidth: 0.5))
                         }
                         .buttonStyle(PlainButtonStyle())
                         
@@ -188,11 +195,12 @@ struct SideNoteView: View {
                         Button(action: { controller.hide() }) {
                             Image(systemName: "chevron.right.2")
                                 .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.secondary.opacity(0.6))
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
                     .padding(20)
+                    .background(Color.black.opacity(0.01))
                     
                     // List
                     ScrollView {
@@ -236,6 +244,7 @@ struct NoteEditorView: View {
                 Spacer()
                 Text("新事项")
                     .font(.headline)
+                    .foregroundColor(.primary.opacity(0.9))
                 Spacer()
                 Button("保存") { onSave(content) }
                     .buttonStyle(PlainButtonStyle())
@@ -244,7 +253,7 @@ struct NoteEditorView: View {
                     .disabled(content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .padding(20)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
             
             // Editor Area
             ZStack(alignment: .topLeading) {
@@ -272,9 +281,10 @@ struct NoteEditorView: View {
             .font(.caption)
             .foregroundColor(.secondary.opacity(0.5))
             .padding(12)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.3))
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.2))
         }
-        .background(AcrylicBackground().cornerRadius(16)) // Ensure editor has background
+        .background(AcrylicBackground().cornerRadius(20))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 0.5))
     }
 }
 
@@ -359,7 +369,7 @@ struct NoteRow: View {
                 Text(LocalizedStringKey(note.content))
                     .font(.system(size: 13))
                     .strikethrough(note.isCompleted)
-                    .foregroundColor(note.isCompleted ? .secondary : .primary)
+                    .foregroundColor(note.isCompleted ? .secondary : .primary.opacity(0.9))
                     .fixedSize(horizontal: false, vertical: true)
                     .lineSpacing(4)
                 
@@ -385,11 +395,11 @@ struct NoteRow: View {
         .padding(12)
         .background(
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.4))
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.ultraThinMaterial)
                 
                 if isHovering {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                         .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
                 }
