@@ -166,6 +166,10 @@ struct ContentView: View {
                             NeumorphicIconButton(icon: "plus", action: { showAddBookmark = true })
                         }
                         
+                        NeumorphicIconButton(icon: "message.fill", color: .indigo, action: {
+                            AIChatWindowController.shared.toggle(viewModel: viewModel)
+                        })
+                        
                         NeumorphicIconButton(icon: "power", color: .red, action: { NSApplication.shared.terminate(nil) })
                     }
                 }

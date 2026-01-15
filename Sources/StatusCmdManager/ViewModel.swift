@@ -27,17 +27,30 @@ class AppViewModel: ObservableObject {
     // Note State
     @Published var notes: [NoteItem] = []
     
+    // AI Chat State
+    @Published var chatMessages: [AIChatMessage] = []
+    @Published var chatSettings: AIChatSettings = AIChatSettings()
+    @Published var isChatSending: Bool = false
+    @Published var chatInput: String = ""
+    
     private let storageKey = "UserCommands_v1"
     private let bookmarkKey = "UserBookmarks_v1"
     private let noteKey = "UserNotes_v1"
+    private let chatSettingsKey = "UserChatSettings_v1"
     private let viewModeKey = "isBookmarkGridView"
     
     init() {
         loadCommands()
         loadBookmarks()
         loadNotes()
+        loadChatSettings()
         self.isBookmarkGridView = UserDefaults.standard.object(forKey: viewModeKey) as? Bool ?? true
         setupCloudSync()
+        
+        // Initial Greeting
+        if chatMessages.isEmpty {
+            chatMessages.append(AIChatMessage(role: .assistant, content: "你好！我是你的 AI 助手。请在设置中配置 API Key 后开始交谈。"))
+        }
     }
     
     // MARK: - iCloud Sync logic
@@ -60,6 +73,7 @@ class AppViewModel: ObservableObject {
         loadCommands()
         loadBookmarks()
         loadNotes()
+        loadChatSettings()
     }
     
     func saveViewMode() {
@@ -69,6 +83,83 @@ class AppViewModel: ObservableObject {
     }
     
     // MARK: - Persistence
+    func loadChatSettings() {
+        let cloudData = NSUbiquitousKeyValueStore.default.data(forKey: chatSettingsKey)
+        let localData = UserDefaults.standard.data(forKey: chatSettingsKey)
+        
+        if let data = cloudData ?? localData,
+           let decoded = try? JSONDecoder().decode(AIChatSettings.self, from: data) {
+            self.chatSettings = decoded
+        }
+    }
+    
+    func saveChatSettings() {
+        if let encoded = try? JSONEncoder().encode(chatSettings) {
+            UserDefaults.standard.set(encoded, forKey: chatSettingsKey)
+            NSUbiquitousKeyValueStore.default.set(encoded, forKey: chatSettingsKey)
+            NSUbiquitousKeyValueStore.default.synchronize()
+        }
+    }
+    
+    func clearChatHistory() {
+        chatMessages.removeAll()
+        chatMessages.append(AIChatMessage(role: .assistant, content: "对话已重置。"))
+    }
+    
+    func sendChatMessage() {
+        let content = chatInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return }
+        
+        let userMsg = AIChatMessage(role: .user, content: content)
+        chatMessages.append(userMsg)
+        chatInput = ""
+        isChatSending = true
+        
+        let provider = chatSettings.selectedProvider
+        let apiKey = chatSettings.getApiKey(for: provider)
+        let model = chatSettings.getModel(for: provider)
+        let baseUrl = chatSettings.getBaseUrl(for: provider)
+        
+        if provider != .custom && apiKey.isEmpty {
+             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.chatMessages.append(AIChatMessage(role: .assistant, content: "请先点击右上角设置图标配置 \(provider.rawValue) 的 API Key。", isError: true))
+                self.isChatSending = false
+            }
+            return
+        }
+        
+        Task {
+            let aiMsgId = UUID()
+            let aiMsg = AIChatMessage(id: aiMsgId, role: .assistant, content: "")
+            
+            await MainActor.run {
+                self.chatMessages.append(aiMsg)
+                self.isChatSending = true
+            }
+            
+            do {
+                var fullContent = ""
+                for try await chunk in AIService.stream(provider: provider, apiKey: apiKey, model: model, messages: chatMessages.dropLast(), baseUrl: baseUrl) {
+                    fullContent += chunk
+                    await MainActor.run {
+                        if let index = self.chatMessages.firstIndex(where: { $0.id == aiMsgId }) {
+                            self.chatMessages[index].content = fullContent
+                        }
+                    }
+                }
+                await MainActor.run { self.isChatSending = false }
+            } catch {
+                await MainActor.run {
+                    self.isChatSending = false
+                    if let index = self.chatMessages.firstIndex(where: { $0.id == aiMsgId }) {
+                        self.chatMessages[index].content += "\n[Error: \(error.localizedDescription)]"
+                        self.chatMessages[index].isError = true
+                    }
+                }
+            }
+        }
+    }
+    
     func loadCommands() {
         // 优先从 iCloud 读取，如果没有则回退到本地
         let cloudData = NSUbiquitousKeyValueStore.default.data(forKey: storageKey)
@@ -399,5 +490,103 @@ class AppViewModel: ObservableObject {
                 self.refreshBrewServices()
             }
         }
+    }
+}
+
+// MARK: - AI Service
+
+class AIService {
+    enum AIError: Error {
+        case invalidURL
+        case noData
+        case decodingError
+        case apiError(String)
+    }
+    
+    static func stream(provider: AIProvider, apiKey: String, model: String, messages: [AIChatMessage], baseUrl: String? = nil) -> AsyncThrowingStream<String, Error> {
+        return AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    switch provider {
+                    case .openai, .deepseek, .custom:
+                        try await streamOpenAICompatible(provider: provider, apiKey: apiKey, model: model, messages: messages, baseUrl: baseUrl, continuation: continuation)
+                    case .claude:
+                        try await streamClaude(apiKey: apiKey, model: model, messages: messages, continuation: continuation)
+                    case .gemini:
+                        // Gemini fallback (simplified)
+                        continuation.yield("Gemini streaming is currently handled via one-shot in this version.")
+                        continuation.finish()
+                    }
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+    
+    private static func streamOpenAICompatible(provider: AIProvider, apiKey: String, model: String, messages: [AIChatMessage], baseUrl: String?, continuation: AsyncThrowingStream<String, Error>.Continuation) async throws {
+        let finalUrl: URL?
+        if let baseUrl = baseUrl, !baseUrl.isEmpty {
+            if baseUrl.contains("/chat/completions") { finalUrl = URL(string: baseUrl) }
+            else { finalUrl = URL(string: baseUrl)?.appendingPathComponent("chat/completions") }
+        } else {
+            let defaultString = provider == .deepseek ? "https://api.deepseek.com/v1/chat/completions" : "https://api.openai.com/v1/chat/completions"
+            finalUrl = URL(string: defaultString)
+        }
+        
+        guard let url = finalUrl else { throw AIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let apiMessages = messages.map { ["role": $0.role.rawValue, "content": $0.content] }
+        let body: [String: Any] = ["model": model, "messages": apiMessages, "stream": true]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+             throw AIError.apiError("API Error")
+        }
+        
+        for try await line in bytes.lines {
+            if line.hasPrefix("data: ") {
+                let jsonStr = line.dropFirst(6)
+                if jsonStr.trimmingCharacters(in: .whitespaces) == "[DONE]" { break }
+                if let data = jsonStr.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let choices = json["choices"] as? [[String: Any]],
+                   let first = choices.first,
+                   let delta = first["delta"] as? [String: Any],
+                   let content = delta["content"] as? String {
+                    continuation.yield(content)
+                }
+            }
+        }
+        continuation.finish()
+    }
+    
+    private static func streamClaude(apiKey: String, model: String, messages: [AIChatMessage], continuation: AsyncThrowingStream<String, Error>.Continuation) async throws {
+         guard let url = URL(string: "https://api.anthropic.com/v1/messages") else { throw AIError.invalidURL }
+         var request = URLRequest(url: url)
+         request.httpMethod = "POST"
+         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+         let apiMessages = messages.filter { $0.role != .system }.map { ["role": $0.role.rawValue, "content": $0.content] }
+         var body: [String: Any] = ["model": model, "max_tokens": 1024, "messages": apiMessages, "stream": true]
+         if let systemMsg = messages.first(where: { $0.role == .system }) { body["system"] = systemMsg.content }
+         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+         let (bytes, response) = try await URLSession.shared.bytes(for: request)
+         guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else { throw AIError.apiError("Claude API Error") }
+         for try await line in bytes.lines {
+             if line.hasPrefix("data: ") {
+                 let jsonStr = line.dropFirst(6)
+                 if let data = jsonStr.data(using: .utf8), let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let type = json["type"] as? String {
+                     if type == "content_block_delta", let delta = json["delta"] as? [String: Any], let text = delta["text"] as? String { continuation.yield(text) }
+                 }
+             }
+         }
+         continuation.finish()
     }
 }
