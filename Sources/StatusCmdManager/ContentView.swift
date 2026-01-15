@@ -388,7 +388,7 @@ struct NeumorphicTextField: View {
 struct CommandListView: View {
     @ObservedObject var viewModel: AppViewModel; @Binding var draggedItem: CommandItem?; var onEdit: (CommandItem) -> Void; var onDeleteRequest: (CommandItem) -> Void
     var body: some View {
-        ScrollView {
+        ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 8) {
                 if viewModel.commands.isEmpty { EmptyStateView { } }
                 else {
@@ -436,7 +436,7 @@ struct BookmarkListView: View {
     @ObservedObject var viewModel: AppViewModel; @Binding var draggedItem: BookmarkItem?; var onDeleteRequest: (BookmarkItem) -> Void; var onEditRequest: (BookmarkItem) -> Void
     let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
     var body: some View {
-        ScrollView {
+        ScrollView(showsIndicators: false) {
             if viewModel.bookmarks.isEmpty { VStack { Image(systemName: "bookmark.slash").font(.largeTitle); Text("暂无书签") }.padding(.top, 60).foregroundColor(.secondary) }
             else if viewModel.isBookmarkGridView { LazyVGrid(columns: columns, spacing: 16) { ForEach(viewModel.bookmarks) { item in BookmarkCard(item: item, onDelete: { onDeleteRequest(item) }, onEdit: { onEditRequest(item) }).onDrag { self.draggedItem = item; return NSItemProvider(object: item.id.uuidString as NSString) }.onDrop(of: [.text], delegate: ReorderableDropDelegate(item: item, list: viewModel.bookmarks, draggedItem: $draggedItem, onMove: viewModel.moveBookmark)) } }.padding(16) }
             else { LazyVStack(spacing: 8) { ForEach(viewModel.bookmarks) { item in BookmarkRow(item: item, draggedItem: $draggedItem, onDelete: { onDeleteRequest(item) }, onEdit: { onEditRequest(item) }).onDrop(of: [.text], delegate: ReorderableDropDelegate(item: item, list: viewModel.bookmarks, draggedItem: $draggedItem, onMove: viewModel.moveBookmark)) } }.padding(16) }
@@ -521,7 +521,7 @@ struct CommandEditView: View {
             }.padding(16).modifier(LiquidGlassPaneModifier())
             
             // Content
-            ScrollView {
+            ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
                     
                     // Brew Selector
@@ -597,7 +597,7 @@ struct CommandEditView: View {
         @Binding var selectedIcon: String
         let columns = [GridItem(.adaptive(minimum: 34), spacing: 8)]
         var body: some View {
-            ScrollView {
+            ScrollView(showsIndicators: false) {
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(presetIcons, id: \.self) { i in
                         Button(action: { selectedIcon = i }) {
@@ -666,7 +666,7 @@ struct IconPicker: View {
     @Binding var selectedIcon: String; @State private var isExpanded = false; let columns = [GridItem(.adaptive(minimum: 30), spacing: 8)]
     var body: some View {
         VStack {
-            ScrollView { LazyVGrid(columns: columns, spacing: 8) { ForEach(presetIcons, id: \.self) { i in Button(action: { selectedIcon = i }) { Image(systemName: i).font(.system(size: 14)).frame(width: 30, height: 30).background(RoundedRectangle(cornerRadius: 6).fill(selectedIcon == i ? Color.blue : Color.white.opacity(0.1))).foregroundColor(selectedIcon == i ? .white : .primary) }.buttonStyle(PlainButtonStyle()) } }.padding(4) }
+            ScrollView(showsIndicators: false) { LazyVGrid(columns: columns, spacing: 8) { ForEach(presetIcons, id: \.self) { i in Button(action: { selectedIcon = i }) { Image(systemName: i).font(.system(size: 14)).frame(width: 30, height: 30).background(RoundedRectangle(cornerRadius: 6).fill(selectedIcon == i ? Color.blue : Color.white.opacity(0.1))).foregroundColor(selectedIcon == i ? .white : .primary) }.buttonStyle(PlainButtonStyle()) } }.padding(4) }
             .frame(height: isExpanded ? 150 : 40).background(Color.black.opacity(0.05)).cornerRadius(8)
             Button(isExpanded ? "收起" : "展开图标库") { withAnimation { isExpanded.toggle() } }.font(.system(size: 10)).foregroundColor(.blue)
         }

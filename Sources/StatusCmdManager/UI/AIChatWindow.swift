@@ -140,7 +140,7 @@ struct AIChatRootView: View {
                 
                 // Chat Area
                 ScrollViewReader { proxy in
-                    ScrollView {
+                    ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 16) {
                             ForEach(viewModel.chatMessages) { msg in
                                 ChatBubble(

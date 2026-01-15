@@ -56,7 +56,7 @@ struct ToolsView: View {
     var body: some View {
         ZStack {
             // Main Grid Content
-            ScrollView {
+            ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(ToolType.allCases, id: \.self) { tool in
@@ -371,48 +371,125 @@ struct JsonTreeViewWrapper: View {
     @State private var input = ""
     @State private var jsonObject: Any? = nil
     @State private var errorMsg = ""
+    @State private var isAutoParsed = false
     
     var body: some View {
-        VStack(spacing: 16) {
-            VStack(alignment: .leading) {
-                Text("INPUT JSON").font(.caption).bold().foregroundColor(.secondary)
-                TextEditor(text: $input)
-                    .font(.system(.caption, design: .monospaced))
-                    .padding(4)
-                    .background(LiquidInputBackground())
-                    .frame(height: 240) // Increased for better multi-line input
-            }
-            
-            HStack(spacing: 16) {
-                Button(action: parseJson) {
-                    Text("解析预览")
-                }
-                .buttonStyle(LiquidPillButtonStyle())
-                
-                if jsonObject != nil {
-                    Button(action: openDetailWindow) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "macwindow")
-                            Text("全屏查看")
+        ZStack {
+            if let obj = jsonObject {
+                // MARK: - Preview Mode
+                VStack(spacing: 16) {
+                    HStack {
+                        Image(systemName: "curlybraces").foregroundColor(.blue)
+                        Text("结构视图").font(.system(size: 13, weight: .bold)).foregroundColor(.primary.opacity(0.9))
+                        Spacer()
+                        
+                        // Actions in Preview
+                        HStack(spacing: 12) {
+                            Button(action: { 
+                                // Open independent window with current data
+                                JsonDetailWindowController.shared.show(jsonObject: obj)
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "macwindow")
+                                    Text("全屏")
+                                }
+                            }
+                            .buttonStyle(LiquidPillButtonStyle())
+                            
+                            Button(action: { 
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                    input = ""
+                                    jsonObject = nil
+                                    errorMsg = ""
+                                }
+                            }) {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(LiquidIconButtonStyle())
                         }
                     }
-                    .buttonStyle(LiquidPillButtonStyle())
+                    
+                    ScrollView([.horizontal, .vertical], showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            JsonNodeView(key: "Root", value: obj, isRoot: true)
+                        }
+                        .padding(16)
+                    }
+                    .frame(height: 240)
+                    .background(LiquidInputBackground())
                 }
-            }
-            
-            if !errorMsg.isEmpty {
-                Text(errorMsg).foregroundColor(.red).font(.caption)
-            }
-            
-            if let obj = jsonObject {
-                VStack(alignment: .leading) {
-                    Text("PREVIEW").font(.caption).bold().foregroundColor(.secondary)
-                    ScrollView([.horizontal, .vertical]) {
-                        JsonNodeView(key: "Root", value: obj)
-                            .padding(8)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                // MARK: - Input Mode
+                VStack(spacing: 16) {
+                    HStack {
+                        Image(systemName: "doc.text.fill").foregroundColor(.secondary)
+                        Text("JSON 源数据").font(.system(size: 12, weight: .bold)).foregroundColor(.secondary)
+                        Spacer()
+                        if isAutoParsed {
+                            Text("已自动读取剪贴板").font(.caption2).foregroundColor(.green).transition(.opacity)
+                        }
+                    }
+                    
+                    ZStack(alignment: .topLeading) {
+                        LiquidInputBackground()
+                        
+                        if input.isEmpty {
+                            Text("粘贴 JSON 内容...")
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(.secondary.opacity(0.4))
+                                .padding(12)
+                                .allowsHitTesting(false)
+                        }
+                        
+                        // Custom Editor without Scrollbars
+                        JsonInputEditor(text: $input)
+                            .padding(6)
                     }
                     .frame(height: 200)
-                    .background(LiquidInputBackground())
+                    
+                    HStack {
+                        if !errorMsg.isEmpty {
+                            Text(errorMsg)
+                                .font(.caption)
+                                .foregroundColor(.red.opacity(0.8))
+                                .lineLimit(1)
+                        }
+                        
+                        Spacer()
+                        
+                        Button(action: parseJson) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                Text("格式化")
+                            }
+                        }
+                        .buttonStyle(LiquidPillButtonStyle())
+                        .disabled(input.isEmpty)
+                        .opacity(input.isEmpty ? 0.5 : 1)
+                    }
+                }
+                .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: jsonObject != nil)
+        .onAppear {
+            checkClipboard()
+        }
+    }
+    
+    func checkClipboard() {
+        let pasteboard = NSPasteboard.general
+        if let string = pasteboard.string(forType: .string) {
+            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Simple heuristic to avoid parsing random text
+            if (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) || (trimmed.hasPrefix("[") && trimmed.hasSuffix("]")) {
+                if let data = trimmed.data(using: .utf8),
+                   (try? JSONSerialization.jsonObject(with: data, options: [])) != nil {
+                    self.input = trimmed
+                    self.parseJson()
+                    self.isAutoParsed = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.isAutoParsed = false }
                 }
             }
         }
@@ -424,8 +501,8 @@ struct JsonTreeViewWrapper: View {
             jsonObject = try JSONSerialization.jsonObject(with: data, options: [])
             errorMsg = ""
         } catch {
-            errorMsg = "Error: \(error.localizedDescription)"
-            jsonObject = nil
+            errorMsg = "无效的 JSON 格式"
+            withAnimation { jsonObject = nil }
         }
     }
     
@@ -436,41 +513,102 @@ struct JsonTreeViewWrapper: View {
     }
 }
 
+// Custom Editor to hide scrollbars
+struct JsonInputEditor: NSViewRepresentable {
+    @Binding var text: String
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSTextView.scrollableTextView()
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = false // Hide Scrollbar
+        scrollView.hasHorizontalScroller = false
+        
+        let textView = scrollView.documentView as! NSTextView
+        textView.drawsBackground = false
+        textView.backgroundColor = .clear
+        textView.delegate = context.coordinator
+        textView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        textView.textColor = .labelColor
+        textView.isRichText = false
+        
+        // Padding
+        textView.textContainerInset = NSSize(width: 4, height: 4)
+        
+        return scrollView
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        let textView = nsView.documentView as! NSTextView
+        if textView.string != text {
+            textView.string = text
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: JsonInputEditor
+        init(_ parent: JsonInputEditor) { self.parent = parent }
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            self.parent.text = textView.string
+        }
+    }
+}
+
 struct JsonNodeView: View {
     let key: String
     let value: Any
+    var isRoot: Bool = false
     @State private var isExpanded = true
     
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
+            // Node Header
+            HStack(spacing: 6) {
                 if isContainer {
-                    Button(action: { withAnimation { isExpanded.toggle() } }) {
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                            .frame(width: 12)
+                    Button(action: { withAnimation(.spring(response: 0.3)) { isExpanded.toggle() } }) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .foregroundColor(.secondary.opacity(0.8))
+                            .frame(width: 14, height: 14)
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(4)
                     }
                     .buttonStyle(PlainButtonStyle())
                 } else {
-                    Spacer().frame(width: 12)
+                    Spacer().frame(width: 14)
                 }
                 
-                Text(key).font(.system(size: 12, weight: .semibold, design: .monospaced)).foregroundColor(.primary)
-                Text(":").font(.system(size: 12, design: .monospaced))
+                // Key
+                if !isRoot {
+                    Text(key)
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.primary.opacity(0.9))
+                    Text(":")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
                 
+                // Value
                 if !isContainer {
                     Text("\(String(describing: value))")
                         .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(.blue.opacity(0.8))
+                        .foregroundColor(valueColor)
                         .lineLimit(1)
                 } else {
                     Text(typeDescription)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.secondary.opacity(0.1)))
+                        .foregroundColor(.secondary.opacity(0.8))
                 }
             }
+            .padding(.vertical, 2)
             
+            // Children
             if isExpanded && isContainer {
                 VStack(alignment: .leading, spacing: 2) {
                     if let dict = value as? [String: Any] {
@@ -483,8 +621,17 @@ struct JsonNodeView: View {
                         }
                     }
                 }
-                .padding(.leading, 18)
-                .overlay(Rectangle().fill(Color.secondary.opacity(0.2)).frame(width: 1), alignment: .leading)
+                .padding(.leading, 9) // Indentation
+                .overlay(
+                    // Hierarchy Line
+                    Rectangle()
+                        .fill(LinearGradient(gradient: Gradient(colors: [Color.secondary.opacity(0.2), Color.secondary.opacity(0.05)]), startPoint: .top, endPoint: .bottom))
+                        .frame(width: 1)
+                        .padding(.top, 4)
+                        .padding(.bottom, 4),
+                    alignment: .leading
+                )
+                .padding(.leading, 5) // Spacing for line
             }
         }
     }
@@ -494,9 +641,15 @@ struct JsonNodeView: View {
     }
     
     var typeDescription: String {
-        if let arr = value as? [Any] { return "Array(\(arr.count))" }
-        if let dict = value as? [String: Any] { return "Object(\(dict.count))" }
+        if let arr = value as? [Any] { return "Array [\(arr.count)]" }
+        if let dict = value as? [String: Any] { return "Object {\(dict.count)}" }
         return ""
+    }
+    
+    var valueColor: Color {
+        if value is String { return .green.opacity(0.8) }
+        if value is NSNumber { return .blue.opacity(0.8) } // Covers Int, Double, Bool
+        return .primary.opacity(0.8)
     }
 }
 

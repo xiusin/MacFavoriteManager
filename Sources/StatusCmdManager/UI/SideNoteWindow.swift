@@ -203,7 +203,7 @@ struct SideNoteView: View {
                     .background(Color.black.opacity(0.01))
                     
                     // List
-                    ScrollView {
+                    ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 12) {
                             ForEach(viewModel.notes) { note in
                                 NoteRow(note: note, onToggle: {

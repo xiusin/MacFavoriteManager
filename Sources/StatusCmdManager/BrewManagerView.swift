@@ -96,7 +96,7 @@ struct MyServicesView: View {
     @ObservedObject var viewModel: AppViewModel
     
     var body: some View {
-        ScrollView {
+        ScrollView(showsIndicators: false) {
             if viewModel.isBrewLoading && viewModel.brewServices.isEmpty {
                 ProgressView("加载中...")
                     .padding(.top, 50)
@@ -159,7 +159,7 @@ struct ServiceStoreView: View {
             .padding(.vertical, 10)
             
             // Results
-            ScrollView {
+            ScrollView(showsIndicators: false) {
                 if viewModel.isSearching {
                     HStack {
                         ProgressView().scaleEffect(0.6)
