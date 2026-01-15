@@ -92,14 +92,26 @@ struct FloatingRootView: View {
     
     var body: some View {
         ZStack {
-            // Liquid Glass Background
+            // Updated Liquid Glass Background
             AcrylicBackground()
                 .cornerRadius(20)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                        .strokeBorder(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.white.opacity(0.6),
+                                    Color.white.opacity(0.1),
+                                    Color.white.opacity(0.05),
+                                    Color.white.opacity(0.2)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
                 )
-                .shadow(color: Color.black.opacity(0.3), radius: 25, x: 0, y: 15)
+                .shadow(color: Color.black.opacity(0.2), radius: 25, x: 0, y: 15)
             
             FloatingToolMenu(controller: controller)
         }
@@ -148,6 +160,8 @@ struct FloatingToolMenu: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
+            .background(.ultraThinMaterial) // Liquid header
+            .overlay(Rectangle().frame(height: 0.5).foregroundColor(Color.white.opacity(0.1)), alignment: .bottom)
             
             // Search & Clear Row
             HStack(spacing: 8) {
@@ -191,9 +205,7 @@ struct FloatingToolMenu: View {
                 .buttonStyle(PlainButtonStyle())
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 12)
-            
-            Divider().opacity(0.05)
+            .padding(.vertical, 12)
             
             // Clipboard List
             ScrollViewReader { proxy in
@@ -210,7 +222,7 @@ struct FloatingToolMenu: View {
                         .padding(.top, 80)
                         .frame(maxWidth: .infinity)
                     } else {
-                        LazyVStack(spacing: 6) {
+                        LazyVStack(spacing: 8) {
                             ForEach(Array(filteredHistory.enumerated()), id: \.element.id) { index, item in
                                 FloatingClipboardRow(item: item, isSelected: index == selectedIndex)
                                     .id(index)
@@ -324,7 +336,7 @@ struct FloatingClipboardRow: View {
                     .foregroundColor(.blue.opacity(0.6))
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(
             ZStack {
@@ -334,13 +346,25 @@ struct FloatingClipboardRow: View {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(Color.blue.opacity(0.3), lineWidth: 0.5)
                 } else {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .opacity(isHovering ? 1 : 0)
+                    // Liquid Glass Row Style
+                    if isHovering {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                    } else {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.white.opacity(0.001))
+                    }
                     
                     if isHovering {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                            .stroke(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.white.opacity(0.5), Color.white.opacity(0.1)]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 0.5
+                            )
                     }
                 }
             }

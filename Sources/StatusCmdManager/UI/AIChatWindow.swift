@@ -186,7 +186,7 @@ struct AIChatRootView: View {
                     })
                     .textFieldStyle(PlainTextFieldStyle())
                     .padding(10)
-                    .background(NeumorphicInputBackground())
+                    .background(GlassInputBackground())
                     .font(.system(size: 13))
                     
                     Button(action: { viewModel.sendChatMessage() }) {
@@ -348,6 +348,17 @@ struct ConversationalBubbleShape: Shape {
         
         path.closeSubpath()
         return path
+    }
+}
+
+struct GlassInputBackground: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(Color.black.opacity(0.05))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+            )
     }
 }
 

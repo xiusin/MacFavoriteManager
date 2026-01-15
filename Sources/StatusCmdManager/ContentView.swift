@@ -8,10 +8,53 @@ struct AcrylicBackground: NSViewRepresentable {
         let view = NSVisualEffectView()
         view.blendingMode = .behindWindow
         view.state = .active
-        view.material = .hudWindow 
+        // 使用 .headerView 获取更明亮、磨砂质感的背景
+        view.material = .headerView 
         return view
     }
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+}
+
+struct LiquidGlassModifier: ViewModifier {
+    @Environment(\.colorScheme) var colorScheme
+    
+    func body(content: Content) -> some View {
+        content
+            .background(
+                ZStack {
+                    // 提升底色不透明度，增强对比
+                    Color(NSColor.windowBackgroundColor).opacity(0.4)
+                    
+                    // 增强光泽渐变
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.white.opacity(colorScheme == .dark ? 0.2 : 0.5),
+                            Color.white.opacity(0.0)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                }
+            )
+            .overlay(
+                // 显著增强边框亮度，使其看起来像玻璃切面
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.white.opacity(0.9), // 顶部强高光
+                                Color.white.opacity(0.3),
+                                Color.white.opacity(0.1),
+                                Color.white.opacity(0.4)  // 底部反光
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4) // 增加阴影深度
+    }
 }
 
 struct LiquidGlassPaneModifier: ViewModifier {
@@ -26,6 +69,7 @@ struct LiquidGlassPaneModifier: ViewModifier {
             )
     }
 }
+
 
 enum AppRoute: Equatable {
     case list
@@ -466,32 +510,110 @@ struct CommandEditView: View {
     @State private var brewServices: [BrewService] = []; @State private var isLoadingBrew = false
     @State private var name = ""; @State private var desc = ""; @State private var icon = "terminal"
     @State private var startCmd = ""; @State private var stopCmd = ""; @State private var checkCmd = ""
+    
     var body: some View {
         VStack(spacing: 0) {
+            // Header
             HStack {
                 Button(action: onDismiss) { HStack { Image(systemName: "chevron.left"); Text("返回") }.font(.system(size: 14)).foregroundColor(.secondary) }.buttonStyle(PlainButtonStyle())
                 Spacer(); Text(item == nil ? "添加服务" : "编辑服务").font(.system(size: 15, weight: .bold)); Spacer()
                 if item == nil { Picker("", selection: $mode) { Text("Brew").tag(Mode.brew); Text("Custom").tag(Mode.custom) }.pickerStyle(SegmentedPickerStyle()).frame(width: 120).onChange(of: mode) { _ in if mode == .brew { loadBrew() } } }
             }.padding(16).modifier(LiquidGlassPaneModifier())
+            
+            // Content
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: 24) {
+                    
+                    // Brew Selector
                     if mode == .brew && item == nil {
-                        Menu { ForEach(brewServices) { s in Button(s.name) { applyBrew(s) } } } label: { HStack { Text(name.isEmpty ? "选择服务..." : name); Spacer(); Image(systemName: "chevron.down") }.padding(10).background(NeumorphicInputBackground()) }
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("HOMEBREW 服务").font(.caption).bold().foregroundColor(.secondary).padding(.leading, 4)
+                            Menu { ForEach(brewServices) { s in Button(s.name) { applyBrew(s) } } } label: {
+                                HStack {
+                                    Text(name.isEmpty ? "点击选择服务..." : name).foregroundColor(name.isEmpty ? .secondary : .primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.down").foregroundColor(.secondary)
+                                }
+                                .padding(12)
+                                .background(NeumorphicInputBackground())
+                            }
+                            .menuStyle(BorderlessButtonMenuStyle())
+                        }
                     }
-                    VStack(spacing: 16) {
-                        NeumorphicTextField(icon: "tag", title: "名称", text: $name, placeholder: "Name")
-                        NeumorphicTextField(icon: "text.alignleft", title: "描述", text: $desc, placeholder: "Description")
-                        VStack(alignment: .leading) { Text("图标").font(.caption.bold()); IconPicker(selectedIcon: $icon) }
-                        Divider()
-                        NeumorphicTextField(icon: "play", title: "启动", text: $startCmd, placeholder: "Start", isCode: true)
-                        NeumorphicTextField(icon: "stop", title: "停止", text: $stopCmd, placeholder: "Stop", isCode: true)
-                        NeumorphicTextField(icon: "checkmark", title: "检查", text: $checkCmd, placeholder: "Check (pgrep)", isCode: true)
+                    
+                    // Identity Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "info.circle").foregroundColor(.blue)
+                            Text("基础信息").font(.system(size: 12, weight: .bold)).foregroundColor(.primary.opacity(0.8))
+                        }
+                        
+                        VStack(spacing: 12) {
+                            NeumorphicTextField(icon: "tag", title: "名称", text: $name, placeholder: "服务名称 (如 Redis)")
+                            NeumorphicTextField(icon: "text.alignleft", title: "描述", text: $desc, placeholder: "简短描述")
+                            
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("图标").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary.opacity(0.6)).padding(.leading, 4)
+                                    LiquidIconContainer(size: 44) {
+                                        Image(systemName: icon).font(.system(size: 20)).foregroundColor(.blue)
+                                    }
+                                }
+                                ExpandedIconPicker(selectedIcon: $icon)
+                            }
+                        }
                     }
-                }.padding(20)
+                    .padding(16)
+                    .modifier(LiquidGlassModifier()) // Glass Panel 1
+                    
+                    // Command Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "terminal").foregroundColor(.orange)
+                            Text("执行指令").font(.system(size: 12, weight: .bold)).foregroundColor(.primary.opacity(0.8))
+                        }
+                        
+                        VStack(spacing: 12) {
+                            NeumorphicTextField(icon: "play.fill", title: "启动 (Start)", text: $startCmd, placeholder: "brew services start ...", isCode: true)
+                            NeumorphicTextField(icon: "stop.fill", title: "停止 (Stop)", text: $stopCmd, placeholder: "brew services stop ...", isCode: true)
+                            NeumorphicTextField(icon: "waveform.path.ecg", title: "健康检查 (Check)", text: $checkCmd, placeholder: "pgrep ...", isCode: true)
+                        }
+                    }
+                    .padding(16)
+                    .modifier(LiquidGlassModifier()) // Glass Panel 2
+                    
+                    Spacer(minLength: 20)
+                }
+                .padding(20)
             }
-            HStack { Spacer(); Button("保存") { save() }.buttonStyle(LiquidPillButtonStyle()).disabled(name.isEmpty || startCmd.isEmpty) }.padding(16).modifier(LiquidGlassPaneModifier())
+            
+            // Footer
+            HStack { Spacer(); Button("保存配置") { save() }.buttonStyle(LiquidPillButtonStyle()).disabled(name.isEmpty || startCmd.isEmpty) }.padding(16).modifier(LiquidGlassPaneModifier())
         }.onAppear { setup() }
     }
+    
+    // Sub-components for cleaner code
+    struct ExpandedIconPicker: View {
+        @Binding var selectedIcon: String
+        let columns = [GridItem(.adaptive(minimum: 34), spacing: 8)]
+        var body: some View {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(presetIcons, id: \.self) { i in
+                        Button(action: { selectedIcon = i }) {
+                            Image(systemName: i).font(.system(size: 14))
+                                .frame(width: 34, height: 34)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(selectedIcon == i ? Color.blue : Color.black.opacity(0.05)))
+                                .foregroundColor(selectedIcon == i ? .white : .primary.opacity(0.7))
+                        }.buttonStyle(PlainButtonStyle())
+                    }
+                }.padding(4)
+            }
+            .frame(height: 100)
+            .background(NeumorphicInputBackground())
+        }
+    }
+    
     func setup() { if let e = item { mode = .custom; name = e.name; desc = e.description; icon = e.iconName; startCmd = e.startCommand; stopCmd = e.stopCommand; checkCmd = e.checkCommand } else if mode == .brew { loadBrew() } }
     func loadBrew() { isLoadingBrew = true; DispatchQueue.global().async { let s = ShellRunner.listBrewServices(); DispatchQueue.main.async { self.brewServices = s; self.isLoadingBrew = false } } }
     func applyBrew(_ s: BrewService) { name = s.name; desc = "Brew Service"; startCmd = "/opt/homebrew/bin/brew services start \(s.name)"; stopCmd = "/opt/homebrew/bin/brew services stop \(s.name)"; checkCmd = "pgrep \(s.name)"; icon = IconMatcher.suggest(for: s.name) }
