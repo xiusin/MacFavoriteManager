@@ -78,8 +78,13 @@ struct AIChatRootView: View {
     
     var body: some View {
         ZStack {
+            // Main Acrylic Layer
             AcrylicBackground()
                 .cornerRadius(16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                )
                 .shadow(color: Color.black.opacity(0.3), radius: 20, x: 0, y: 10)
             
             VStack(spacing: 0) {
@@ -102,46 +107,50 @@ struct AIChatRootView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Text(viewModel.chatSettings.selectedProvider.rawValue)
-                                .font(.system(size: 14, weight: .bold))
+                                .font(.system(size: 13, weight: .bold))
                             Image(systemName: "chevron.down").font(.caption)
                         }
-                        .foregroundColor(.primary)
+                        .foregroundColor(.primary.opacity(0.8))
                     }
                     .menuStyle(BorderlessButtonMenuStyle())
                     .frame(width: 100, alignment: .leading)
                     
                     Spacer()
                     
-                    Button(action: { showSettings = true }) {
+                    Button(action: { withAnimation(.spring(response: 0.4)) { showSettings = true } }) {
                         Image(systemName: "gearshape.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary.opacity(0.7))
                     }
                     .buttonStyle(PlainButtonStyle())
                     
                     Button(action: { controller.hide() }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.secondary.opacity(0.5))
+                            .font(.system(size: 15))
+                            .foregroundColor(.secondary.opacity(0.4))
                     }
                     .buttonStyle(PlainButtonStyle())
                     .padding(.leading, 8)
                 }
                 .padding(.horizontal, 20)
-                .padding(.vertical, 16)
-                .background(Color.black.opacity(0.02))
+                .padding(.vertical, 14)
+                .background(Color.black.opacity(0.01)) // Minimal background
                 
-                Divider().opacity(0.1)
+                Divider().opacity(0.08)
                 
                 // Chat Area
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 16) {
                             ForEach(viewModel.chatMessages) { msg in
-                                ChatBubble(message: msg)
-                                    .id(msg.id)
+                                ChatBubble(
+                                    message: msg,
+                                    isLast: viewModel.chatMessages.last?.id == msg.id,
+                                    isSending: viewModel.isChatSending
+                                )
+                                .id(msg.id)
                             }
-                            if viewModel.isChatSending {
+                            if viewModel.isChatSending && viewModel.chatMessages.last?.role == .user {
                                 HStack {
                                     LoadingBubble()
                                     Spacer()
@@ -168,7 +177,7 @@ struct AIChatRootView: View {
                     }
                 }
                 
-                Divider().opacity(0.1)
+                Divider().opacity(0.08)
                 
                 // Input Area
                 HStack(spacing: 12) {
@@ -178,34 +187,36 @@ struct AIChatRootView: View {
                     .textFieldStyle(PlainTextFieldStyle())
                     .padding(10)
                     .background(NeumorphicInputBackground())
-                    .font(.body)
+                    .font(.system(size: 13))
                     
                     Button(action: { viewModel.sendChatMessage() }) {
                         Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(viewModel.chatInput.isEmpty ? .secondary.opacity(0.3) : .blue)
-                            .background(Circle().fill(Color.white).padding(2))
+                            .font(.system(size: 26))
+                            .foregroundColor(viewModel.chatInput.isEmpty ? .secondary.opacity(0.2) : .blue.opacity(0.8))
+                            .background(Circle().fill(Color.white.opacity(0.1)).padding(2))
                     }
                     .buttonStyle(PlainButtonStyle())
                     .disabled(viewModel.chatInput.isEmpty || viewModel.isChatSending)
                 }
                 .padding(16)
-                .background(Color.white.opacity(0.05))
             }
             
             // Settings Overlay
             if showSettings {
-                Color.black.opacity(0.4).edgesIgnoringSafeArea(.all)
-                    .onTapGesture { showSettings = false }
-                    .cornerRadius(16)
-                
-                AIChatSettingsView(settings: $viewModel.chatSettings, isPresented: $showSettings, onSave: viewModel.saveChatSettings)
-                    .frame(width: 280) // More compact
-                    .transition(.scale(scale: 0.95).combined(with: .opacity))
-                    .zIndex(2)
+                ZStack {
+                    Color.black.opacity(0.2).edgesIgnoringSafeArea(.all)
+                        .onTapGesture { withAnimation { showSettings = false } }
+                        .transition(.opacity)
+                    
+                    AIChatSettingsView(settings: $viewModel.chatSettings, isPresented: $showSettings, onSave: viewModel.saveChatSettings)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(24)
+                        .transition(.scale(scale: 0.96).combined(with: .opacity))
+                }
+                .zIndex(2)
             }
         }
-        .frame(width: 500, height: 650) // Updated frame size
+        .frame(width: 500, height: 650)
     }
 }
 
@@ -213,6 +224,8 @@ struct AIChatRootView: View {
 
 struct ChatBubble: View {
     let message: AIChatMessage
+    var isLast: Bool = false
+    var isSending: Bool = false
     @Environment(\.colorScheme) var colorScheme
     
     var isUser: Bool { message.role == .user }
@@ -225,30 +238,33 @@ struct ChatBubble: View {
                 // AI Icon
                 Circle()
                     .fill(LinearGradient(gradient: Gradient(colors: [.blue.opacity(0.3), .purple.opacity(0.3)]), startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 28, height: 28)
-                    .overlay(Image(systemName: "sparkles").font(.system(size: 12)).foregroundColor(.white))
+                    .frame(width: 26, height: 26)
+                    .overlay(Image(systemName: "sparkles").font(.system(size: 11)).foregroundColor(.white))
             }
             
-            Text(message.content)
-                .font(.system(size: 13))
+            Text(message.content + (shouldShowCursor ? " ▋" : ""))
+                .font(.system(size: 12.5))
                 .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .foregroundColor(isUser ? .white : .primary)
+                .padding(.vertical, 9)
+                .foregroundColor(isUser ? .white : .primary.opacity(0.9))
                 .background(
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: 16)
                         .fill(
-                            isUser ? Color.blue : Color(NSColor.controlBackgroundColor)
+                            isUser ? Color.blue.opacity(0.85) : Color.white.opacity(colorScheme == .dark ? 0.05 : 0.4)
                         )
-                        .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: 16)
                         .stroke(Color.white.opacity(isUser ? 0.2 : 0.1), lineWidth: 0.5)
                 )
-                .textSelection(.enabled) // Enable text selection
+                .textSelection(.enabled)
             
             if !isUser { Spacer() }
         }
+    }
+    
+    var shouldShowCursor: Bool {
+        !isUser && isLast && isSending
     }
 }
 
@@ -257,14 +273,14 @@ struct LoadingBubble: View {
     
     var body: some View {
         HStack(spacing: 4) {
-            Circle().fill(Color.secondary).frame(width: 5, height: 5).opacity(isAnimating ? 1 : 0.3)
-            Circle().fill(Color.secondary).frame(width: 5, height: 5).opacity(isAnimating ? 0.3 : 1)
-            Circle().fill(Color.secondary).frame(width: 5, height: 5).opacity(isAnimating ? 1 : 0.3)
+            Circle().fill(Color.secondary.opacity(0.5)).frame(width: 4, height: 4).opacity(isAnimating ? 1 : 0.3)
+            Circle().fill(Color.secondary.opacity(0.5)).frame(width: 4, height: 4).opacity(isAnimating ? 0.3 : 1)
+            Circle().fill(Color.secondary.opacity(0.5)).frame(width: 4, height: 4).opacity(isAnimating ? 1 : 0.3)
         }
-        .padding(12)
+        .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(Color(NSColor.controlBackgroundColor))
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.white.opacity(0.05))
         )
         .onAppear {
             withAnimation(Animation.linear(duration: 0.6).repeatForever()) {
@@ -280,6 +296,7 @@ struct AIChatSettingsView: View {
     var onSave: () -> Void
     
     @State private var currentTab: AIProvider
+    @Environment(\.colorScheme) var colorScheme
     
     init(settings: Binding<AIChatSettings>, isPresented: Binding<Bool>, onSave: @escaping () -> Void) {
         self._settings = settings
@@ -290,115 +307,203 @@ struct AIChatSettingsView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Compact Header
+            // Header
             HStack {
-                Text("模型配置")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("模型配置")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.primary.opacity(0.9))
+                    Text("个性化您的 AI 助手")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary.opacity(0.6))
+                }
                 Spacer()
-                Button(action: { isPresented = false }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                Button(action: { withAnimation { isPresented = false } }) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.white.opacity(0.1))
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(width: 22, height: 22)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
-            .padding(12)
-            .background(Color.white.opacity(0.05))
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
             
-            // Tab Selection (Compact)
+            // Tab Selection (Neumorphic Tabs)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(AIProvider.allCases) { provider in
-                        Button(action: { withAnimation { currentTab = provider } }) {
+                        Button(action: { withAnimation(.spring(response: 0.3)) { currentTab = provider } }) {
                             Text(provider.rawValue)
-                                .font(.system(size: 11, weight: currentTab == provider ? .bold : .medium))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
+                                .font(.system(size: 10, weight: currentTab == provider ? .bold : .medium))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(currentTab == provider ? Color.blue.opacity(0.2) : Color.clear)
+                                    ZStack {
+                                        if currentTab == provider {
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.2))
+                                                .shadow(color: Color.black.opacity(0.1), radius: 1, x: 1, y: 1)
+                                        } else {
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(Color.clear)
+                                        }
+                                    }
                                 )
-                                .foregroundColor(currentTab == provider ? .blue : .secondary)
+                                .foregroundColor(currentTab == provider ? .primary : .secondary)
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 20)
                 .padding(.vertical, 8)
             }
             
-            Divider().opacity(0.1)
+            Divider().opacity(0.05).padding(.horizontal, 20)
             
             // Config Content
-            VStack(spacing: 12) {
-                if currentTab == .custom {
-                    NeumorphicTextField(
-                        icon: "server.rack",
-                        title: "Base URL",
+            ScrollView {
+                VStack(spacing: 16) {
+                    if currentTab == .custom {
+                        compactTextField(
+                            icon: "server.rack",
+                            title: "Base URL",
+                            text: Binding(
+                                get: { settings.customBaseUrls[.custom] ?? "" },
+                                set: { settings.customBaseUrls[.custom] = $0 }
+                            ),
+                            placeholder: "http://localhost:11434/v1"
+                        )
+                    }
+                    
+                    if currentTab != .custom {
+                        compactTextField(
+                            icon: "key.fill",
+                            title: "API Key",
+                            text: Binding(
+                                get: { settings.apiKeys[currentTab] ?? "" },
+                                set: { settings.apiKeys[currentTab] = $0 }
+                            ),
+                            placeholder: "sk-...",
+                            isSecure: true
+                        )
+                    }
+                    
+                    compactTextField(
+                        icon: "cube.fill",
+                        title: "Model Name",
                         text: Binding(
-                            get: { settings.customBaseUrls[.custom] ?? "" },
-                            set: { settings.customBaseUrls[.custom] = $0 }
+                            get: { settings.selectedModels[currentTab] ?? currentTab.defaultModel },
+                            set: { settings.selectedModels[currentTab] = $0 }
                         ),
-                        placeholder: "http://localhost:11434/v1",
-                        isCode: true
+                        placeholder: currentTab.defaultModel
                     )
+                    
+                    // Tip Box
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.blue.opacity(0.4))
+                        Text("密钥将加密存储在本地。建议使用 DeepSeek 或 OpenAI 以获得最佳体验。")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary.opacity(0.5))
+                            .lineSpacing(2)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.03)))
+                    .padding(.top, 10)
                 }
-                
-                if currentTab != .custom {
-                    NeumorphicTextField(
-                        icon: "key.fill",
-                        title: "API Key",
-                        text: Binding(
-                            get: { settings.apiKeys[currentTab] ?? "" },
-                            set: { settings.apiKeys[currentTab] = $0 }
-                        ),
-                        placeholder: "sk-...",
-                        isCode: true
-                    )
-                }
-                
-                NeumorphicTextField(
-                    icon: "cube.fill",
-                    title: "Model Name",
-                    text: Binding(
-                        get: { settings.selectedModels[currentTab] ?? currentTab.defaultModel },
-                        set: { settings.selectedModels[currentTab] = $0 }
-                    ),
-                    placeholder: currentTab.defaultModel,
-                    isCode: true
-                )
+                .padding(24)
             }
-            .padding(16)
+            
+            Spacer()
             
             // Footer
-            HStack {
+            HStack(spacing: 16) {
+                Button(action: { withAnimation { isPresented = false } }) {
+                    Text("取消")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Spacer()
+                
                 Button(action: {
-                    // Also switch the active provider to the one being edited
                     settings.selectedProvider = currentTab
                     onSave()
-                    isPresented = false
+                    withAnimation { isPresented = false }
                 }) {
-                    Text("保存并使用")
-                        .font(.system(size: 11, weight: .bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Color.blue)
+                    Text("保存配置")
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundColor(.white)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 20)
+                        .background(
+                            LinearGradient(gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.blue.opacity(0.6)]), startPoint: .top, endPoint: .bottom)
+                        )
                         .cornerRadius(8)
+                        .shadow(color: Color.blue.opacity(0.2), radius: 4, x: 0, y: 2)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
-            .padding(12)
+            .padding(20)
         }
         .background(
             ZStack {
                 AcrylicBackground()
-                Color(NSColor.windowBackgroundColor).opacity(0.8)
+                Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05)
             }
         )
-        .cornerRadius(12)
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.2), lineWidth: 0.5))
-        .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 4)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+        )
+        .shadow(color: Color.black.opacity(0.2), radius: 25, x: 0, y: 15)
+    }
+    
+    // Helper for compact inputs
+    func compactTextField(icon: String, title: String, text: Binding<String>, placeholder: String, isSecure: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(.secondary.opacity(0.6))
+                .padding(.leading, 4)
+            
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary.opacity(0.5))
+                    .frame(width: 14)
+                
+                if isSecure {
+                    SecureField(placeholder, text: text)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .font(.system(size: 11, design: .monospaced))
+                } else {
+                    TextField(placeholder, text: text)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .font(.system(size: 11, design: .monospaced))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.white.opacity(0.05))
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                }
+            )
+        }
     }
 }
