@@ -75,17 +75,13 @@ struct AIChatRootView: View {
     @ObservedObject var controller: AIChatWindowController
     @EnvironmentObject var viewModel: AppViewModel
     @State private var showSettings = false
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         ZStack {
-            // Main Acrylic Layer
-            AcrylicBackground()
-                .cornerRadius(16)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
-                )
-                .shadow(color: Color.black.opacity(0.3), radius: 20, x: 0, y: 10)
+            // 1. Base Glass Layer with strict clipping
+            AcrylicBackground(radius: 24)
+                .background(Color.black.opacity(colorScheme == .dark ? 0.2 : 0.02))
             
             VStack(spacing: 0) {
                 // Header
@@ -118,9 +114,9 @@ struct AIChatRootView: View {
                     Spacer()
                     
                     Button(action: { withAnimation(.spring(response: 0.4)) { showSettings = true } }) {
-                        Image(systemName: "gearshape.fill")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary.opacity(0.7))
+                        LiquidIconButton(icon: "gearshape.fill", color: .secondary) {
+                            withAnimation(.spring(response: 0.4)) { showSettings = true }
+                        }
                     }
                     .buttonStyle(PlainButtonStyle())
                     
@@ -134,7 +130,6 @@ struct AIChatRootView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 14)
-                .background(Color.black.opacity(0.01)) // Minimal background
                 
                 Divider().opacity(0.08)
                 
@@ -217,6 +212,17 @@ struct AIChatRootView: View {
             }
         }
         .frame(width: 500, height: 650)
+        // 核心修复：强制对整个容器进行圆角裁剪，并增加高亮描边
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            ZStack {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.5), Color.clear]), startPoint: .top, endPoint: .bottom), lineWidth: 1)
+            }
+        )
+        .shadow(color: Color.black.opacity(0.25), radius: 25, x: 0, y: 15)
     }
 }
 
@@ -530,7 +536,7 @@ struct AIChatSettingsView: View {
         }
         .background(
             ZStack {
-                AcrylicBackground()
+                AcrylicBackground(radius: 16)
                 Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05)
             }
         )

@@ -93,8 +93,7 @@ struct FloatingRootView: View {
     var body: some View {
         ZStack {
             // Updated Liquid Glass Background
-            AcrylicBackground()
-                .cornerRadius(20)
+            AcrylicBackground(radius: 20)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .strokeBorder(
@@ -318,7 +317,7 @@ struct FloatingClipboardRow: View {
             // Content
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.text)
-                    .font(.system(size: 11.5))
+                    .font(.system(size: 11.5, weight: .medium))
                     .lineLimit(2)
                     .foregroundColor(.primary.opacity(0.85))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -342,34 +341,47 @@ struct FloatingClipboardRow: View {
             ZStack {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.blue.opacity(0.1))
+                        .fill(Color.blue.opacity(0.12))
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.blue.opacity(0.3), lineWidth: 0.5)
+                        .stroke(Color.blue.opacity(0.35), lineWidth: 1)
                 } else {
                     // Liquid Glass Row Style
-                    if isHovering {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                    } else {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.white.opacity(0.001))
+                    ZStack {
+                        if isHovering {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                        } else {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.white.opacity(0.001))
+                        }
+                        
+                        if isHovering {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.white.opacity(colorScheme == .dark ? 0.05 : 0.15))
+                        }
                     }
                     
                     if isHovering {
+                        // Gloss reflection
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [Color.white.opacity(0.5), Color.white.opacity(0.1)]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 0.5
-                            )
+                            .fill(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.2), Color.clear]), startPoint: .topLeading, endPoint: .bottomTrailing))
+                        
+                        // High-precision border
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05), lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(
+                                    LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.6), Color.white.opacity(0.1)]), startPoint: .topLeading, endPoint: .bottomTrailing),
+                                    lineWidth: 1
+                                )
+                        }
                     }
                 }
             }
         )
-        .scaleEffect(isHovering ? 1.005 : 1.0)
+        .scaleEffect(isHovering ? 1.01 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isHovering)
         .onHover { isHovering = $0 }
     }
 }

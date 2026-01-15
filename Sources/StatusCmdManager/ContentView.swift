@@ -4,15 +4,24 @@ import AppKit
 // MARK: - Core Visuals
 
 struct AcrylicBackground: NSViewRepresentable {
+    var radius: CGFloat = 16
+    
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.blendingMode = .behindWindow
         view.state = .active
-        // 使用 .headerView 获取更明亮、磨砂质感的背景
         view.material = .headerView 
+        
+        // 核心修复：在原生层应用圆角
+        view.wantsLayer = true
+        view.layer?.cornerRadius = radius
+        view.layer?.masksToBounds = true
+        
         return view
     }
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.layer?.cornerRadius = radius
+    }
 }
 
 struct LiquidGlassModifier: ViewModifier {
@@ -22,13 +31,13 @@ struct LiquidGlassModifier: ViewModifier {
         content
             .background(
                 ZStack {
-                    // 提升底色不透明度，增强对比
-                    Color(NSColor.windowBackgroundColor).opacity(0.4)
+                    // 1. 基础模糊材质
+                    Color(NSColor.windowBackgroundColor).opacity(colorScheme == .dark ? 0.3 : 0.5)
                     
-                    // 增强光泽渐变
+                    // 2. 表面液态光泽
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            Color.white.opacity(colorScheme == .dark ? 0.2 : 0.5),
+                            Color.white.opacity(colorScheme == .dark ? 0.15 : 0.3),
                             Color.white.opacity(0.0)
                         ]),
                         startPoint: .topLeading,
@@ -36,24 +45,39 @@ struct LiquidGlassModifier: ViewModifier {
                     )
                 }
             )
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
-                // 显著增强边框亮度，使其看起来像玻璃切面
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.white.opacity(0.9), // 顶部强高光
-                                Color.white.opacity(0.3),
-                                Color.white.opacity(0.1),
-                                Color.white.opacity(0.4)  // 底部反光
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
+                // 3. 玻璃厚度效果：双层精密描边
+                ZStack {
+                    // 外层极细深色边框（增强边界感）
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.black.opacity(colorScheme == .dark ? 0.3 : 0.1), lineWidth: 0.5)
+                    
+                    // 内层强反光高光
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.white.opacity(0.8), // 顶部边缘亮光
+                                    Color.white.opacity(0.1),
+                                    Color.white.opacity(0.0),
+                                    Color.white.opacity(0.3)  // 底部微光
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.2
+                        )
+                }
             )
-            .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4) // 增加阴影深度
+            // 4. 顶部内发光（让玻璃看起来更厚）
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.15), Color.clear]), startPoint: .top, endPoint: .center))
+                    .padding(1)
+                    .allowsHitTesting(false)
+            )
+            .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 5)
     }
 }
 
@@ -149,7 +173,7 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            AcrylicBackground()
+            AcrylicBackground(radius: 16)
             
             VStack(spacing: 0) {
                 headerView
@@ -318,26 +342,72 @@ struct RightClickDetector: NSViewRepresentable {
 
 struct LiquidIconButton: View {
     let icon: String; var color: Color = .primary; let action: () -> Void
+    @Environment(\.colorScheme) var colorScheme
     var body: some View {
         Button(action: action) {
             ZStack {
-                Circle().fill(Color.white.opacity(0.1)).background(.ultraThinMaterial, in: Circle())
-                Circle().fill(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.4), Color.clear]), startPoint: .topLeading, endPoint: .bottomTrailing))
-                Image(systemName: icon).font(.system(size: 12, weight: .semibold)).foregroundColor(color.opacity(0.9))
+                // 1. 材质
+                Circle()
+                    .fill(Color.white.opacity(0.1))
+                    .background(.ultraThinMaterial, in: Circle())
+                
+                // 2. 内部液态渐变
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.white.opacity(0.4), Color.clear]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(color.opacity(0.9))
+                    .shadow(color: color.opacity(0.2), radius: 2, x: 0, y: 0)
             }
             .frame(width: 30, height: 30)
-            .overlay(Circle().strokeBorder(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.7), Color.white.opacity(0.1)]), startPoint: .top, endPoint: .bottom), lineWidth: 1))
+            .overlay(
+                ZStack {
+                    // 外层微阴影边界
+                    Circle().stroke(Color.black.opacity(colorScheme == .dark ? 0.4 : 0.1), lineWidth: 0.5)
+                    // 内层强反光高光
+                    Circle().strokeBorder(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.white.opacity(0.9), Color.white.opacity(0.2)]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+                }
+            )
+            .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
         }.buttonStyle(PlainButtonStyle())
     }
 }
 
 struct LiquidIconContainer<Content: View>: View {
     let size: CGFloat; let content: Content
+    @Environment(\.colorScheme) var colorScheme
     init(size: CGFloat, @ViewBuilder content: () -> Content) { self.size = size; self.content = content() }
     var body: some View {
-        ZStack { RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.1)); content }
+        ZStack { 
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.1))
+                .overlay(
+                    LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.2), Color.clear]), startPoint: .topLeading, endPoint: .bottomTrailing)
+                )
+            content 
+        }
         .frame(width: size, height: size)
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.2), lineWidth: 0.5))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(
+                    LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.6), Color.white.opacity(0.1)]), startPoint: .topLeading, endPoint: .bottomTrailing),
+                    lineWidth: 0.8
+                )
+        )
     }
 }
 
@@ -405,27 +475,55 @@ struct CommandListView: View {
 struct NeumorphicCard: View {
     let command: CommandItem; @Binding var draggedItem: CommandItem?; @Binding var isOn: Bool; var isLoading: Bool; var onEdit: () -> Void; var onDelete: () -> Void
     @State private var offset: CGFloat = 0; @State private var isSwiped = false; @State private var showMenu = false
+    @Environment(\.colorScheme) var colorScheme
     var body: some View {
         ZStack(alignment: .trailing) {
             HStack(spacing: 12) {
-                Image(systemName: "line.3.horizontal").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.2))
-                LiquidIconContainer(size: 32) { Image(systemName: command.iconName).font(.system(size: 14)).foregroundColor(isOn ? .blue : .secondary.opacity(0.7)) }
+                Image(systemName: "line.3.horizontal").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.3))
+                
+                LiquidIconContainer(size: 32) {
+                    Image(systemName: command.iconName).font(.system(size: 14)).foregroundColor(isOn ? .blue : .secondary.opacity(0.7))
+                }
+                
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(command.name).font(.system(size: 13, weight: .medium)).foregroundColor(.primary.opacity(0.9))
+                    Text(command.name).font(.system(size: 13, weight: .bold)).foregroundColor(.primary.opacity(0.9))
                     if !command.description.isEmpty { Text(command.description).font(.system(size: 10)).foregroundColor(.secondary.opacity(0.6)) }
                 }
                 Spacer()
                 if isLoading { ProgressView().scaleEffect(0.5) } else { Toggle("", isOn: $isOn).toggleStyle(SwitchToggleStyle(tint: .blue)).labelsHidden().scaleEffect(0.7) }
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(ZStack { RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.05)).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous)); RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.2), Color.clear]), startPoint: .topLeading, endPoint: .bottomTrailing)) })
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.5), Color.white.opacity(0.1)]), startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.8))
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.white.opacity(colorScheme == .dark ? 0.02 : 0.08))
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    
+                    // Sheen Layer
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.2), Color.clear]), startPoint: .topLeading, endPoint: .bottomTrailing))
+                }
+            )
+            .overlay(
+                ZStack {
+                    // Outer border
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05), lineWidth: 0.5)
+                    // Inner glow edge
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.7), Color.white.opacity(0.1), Color.clear, Color.white.opacity(0.2)]), startPoint: .topLeading, endPoint: .bottomTrailing),
+                            lineWidth: 1
+                        )
+                }
+            )
+            .shadow(color: Color.black.opacity(0.08), radius: 5, x: 0, y: 3)
             .offset(x: offset)
             .overlay(RightClickDetector(onRightClick: { showMenu = true }, onLeftClick: { if isSwiped { withAnimation { offset = 0; isSwiped = false } } }))
             .overlay(HStack { Color.white.opacity(0.001).frame(width: 30).onDrag { self.draggedItem = command; return NSItemProvider(object: command.id.uuidString as NSString) }; Spacer() })
             .popover(isPresented: $showMenu, arrowEdge: .bottom) { BookmarkContextMenu(onEdit: onEdit, onDelete: onDelete, showMenu: $showMenu) }
             .simultaneousGesture(DragGesture(minimumDistance: 25).onChanged { v in if abs(v.translation.width) > abs(v.translation.height) * 2 { offset = isSwiped ? v.translation.width - 90 : v.translation.width } }
-                .onEnded { v in withAnimation { if v.translation.width < -30 { offset = -90; isSwiped = true } else { offset = 0; isSwiped = false } } })
+                .onEnded { v in withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { if v.translation.width < -30 { offset = -90; isSwiped = true } else { offset = 0; isSwiped = false } } })
             
             if isSwiped { HStack(spacing: 12) { LiquidActionButton(icon: "slider.horizontal.3", color: .indigo) { withAnimation { offset = 0; isSwiped = false }; onEdit() }; LiquidActionButton(icon: "trash.fill", color: .orange) { withAnimation { offset = 0; isSwiped = false }; onDelete() } }.padding(.trailing, 12) }
         }
@@ -439,17 +537,33 @@ struct BookmarkListView: View {
         ScrollView(showsIndicators: false) {
             if viewModel.bookmarks.isEmpty { VStack { Image(systemName: "bookmark.slash").font(.largeTitle); Text("暂无书签") }.padding(.top, 60).foregroundColor(.secondary) }
             else if viewModel.isBookmarkGridView { LazyVGrid(columns: columns, spacing: 16) { ForEach(viewModel.bookmarks) { item in BookmarkCard(item: item, onDelete: { onDeleteRequest(item) }, onEdit: { onEditRequest(item) }).onDrag { self.draggedItem = item; return NSItemProvider(object: item.id.uuidString as NSString) }.onDrop(of: [.text], delegate: ReorderableDropDelegate(item: item, list: viewModel.bookmarks, draggedItem: $draggedItem, onMove: viewModel.moveBookmark)) } }.padding(16) }
-            else { LazyVStack(spacing: 8) { ForEach(viewModel.bookmarks) { item in BookmarkRow(item: item, draggedItem: $draggedItem, onDelete: { onDeleteRequest(item) }, onEdit: { onEditRequest(item) }).onDrop(of: [.text], delegate: ReorderableDropDelegate(item: item, list: viewModel.bookmarks, draggedItem: $draggedItem, onMove: viewModel.moveBookmark)) } }.padding(16) }
+            else { LazyVStack(spacing: 10) { ForEach(viewModel.bookmarks) { item in BookmarkRow(item: item, draggedItem: $draggedItem, onDelete: { onDeleteRequest(item) }, onEdit: { onEditRequest(item) }).onDrop(of: [.text], delegate: ReorderableDropDelegate(item: item, list: viewModel.bookmarks, draggedItem: $draggedItem, onMove: viewModel.moveBookmark)) } }.padding(16) }
         }
     }
 }
 
 struct BookmarkCard: View {
     let item: BookmarkItem; var onDelete: () -> Void; var onEdit: () -> Void; @State private var showMenu = false
+    @Environment(\.colorScheme) var colorScheme
     var body: some View {
-        VStack(spacing: 8) { LiquidIconContainer(size: 44) { BookmarkIconView(iconUrl: item.iconUrl).frame(width: 24, height: 24).cornerRadius(4) }; Text(item.title).font(.system(size: 11, weight: .medium)).lineLimit(1).foregroundColor(.primary.opacity(0.8)) }
-        .frame(maxWidth: .infinity).padding(.vertical, 16).background(ZStack { RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.ultraThinMaterial); RoundedRectangle(cornerRadius: 20, style: .continuous).fill(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.2), Color.clear]), startPoint: .topLeading, endPoint: .bottomTrailing)) })
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.4), Color.white.opacity(0.1)]), startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.8))
+        VStack(spacing: 8) { 
+            LiquidIconContainer(size: 44) { BookmarkIconView(iconUrl: item.iconUrl).frame(width: 24, height: 24).cornerRadius(4) }
+            Text(item.title).font(.system(size: 11, weight: .bold)).lineLimit(1).foregroundColor(.primary.opacity(0.85)) 
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 16)
+        .background(
+            ZStack { 
+                RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 20, style: .continuous).fill(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.3), Color.clear]), startPoint: .topLeading, endPoint: .bottomTrailing)) 
+            }
+        )
+        .overlay(
+            ZStack {
+                RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.8), Color.white.opacity(0.1)]), startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.2)
+            }
+        )
+        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
         .overlay(RightClickDetector(onRightClick: { showMenu = true }, onLeftClick: { if let url = URL(string: item.url) { NSWorkspace.shared.open(url) } }))
         .popover(isPresented: $showMenu) { BookmarkContextMenu(onEdit: onEdit, onDelete: onDelete, showMenu: $showMenu) }
     }
@@ -457,11 +571,33 @@ struct BookmarkCard: View {
 
 struct BookmarkRow: View {
     let item: BookmarkItem; @Binding var draggedItem: BookmarkItem?; var onDelete: () -> Void; var onEdit: () -> Void; @State private var offset: CGFloat = 0; @State private var isSwiped = false; @State private var showMenu = false
+    @Environment(\.colorScheme) var colorScheme
     var body: some View {
         ZStack(alignment: .trailing) {
-            HStack(spacing: 12) { Image(systemName: "line.3.horizontal").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.2)); LiquidIconContainer(size: 32) { BookmarkIconView(iconUrl: item.iconUrl).frame(width: 18, height: 18) }; VStack(alignment: .leading, spacing: 2) { Text(item.title).font(.system(size: 13, weight: .medium)); Text(URL(string: item.url)?.host ?? item.url).font(.system(size: 10)).foregroundColor(.secondary) }; Spacer(); Image(systemName: "chevron.right").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.1)) }
-            .padding(10).background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.ultraThinMaterial))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.5), Color.white.opacity(0.1)]), startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.5))
+            HStack(spacing: 12) { 
+                Image(systemName: "line.3.horizontal").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.2))
+                LiquidIconContainer(size: 32) { BookmarkIconView(iconUrl: item.iconUrl).frame(width: 18, height: 18) }
+                VStack(alignment: .leading, spacing: 2) { 
+                    Text(item.title).font(.system(size: 13, weight: .bold)).foregroundColor(.primary.opacity(0.9))
+                    Text(URL(string: item.url)?.host ?? item.url).font(.system(size: 10)).foregroundColor(.secondary.opacity(0.7)) 
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.1)) 
+            }
+            .padding(10)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.ultraThinMaterial)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.2), Color.clear]), startPoint: .topLeading, endPoint: .bottomTrailing))
+                }
+            )
+            .overlay(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.7), Color.white.opacity(0.1)]), startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+                }
+            )
+            .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
             .offset(x: offset).overlay(RightClickDetector(onRightClick: { showMenu = true }, onLeftClick: { if isSwiped { withAnimation { offset = 0; isSwiped = false } } else if let url = URL(string: item.url) { NSWorkspace.shared.open(url) } }))
             .overlay(HStack { Color.white.opacity(0.001).frame(width: 30).onDrag { self.draggedItem = item; return NSItemProvider(object: item.id.uuidString as NSString) }; Spacer() })
             .popover(isPresented: $showMenu) { BookmarkContextMenu(onEdit: onEdit, onDelete: onDelete, showMenu: $showMenu) }

@@ -148,22 +148,27 @@ struct ToolGridItem: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .center, spacing: 8) {
-                // Icon Box
+            VStack(alignment: .center, spacing: 10) {
+                // 1. Recessed Icon Container
                 ZStack {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(tool.color.opacity(0.1))
-                        .shadow(color: tool.color.opacity(0.1), radius: 5, x: 0, y: 2)
+                        .fill(tool.color.opacity(0.15))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(tool.color.opacity(0.2), lineWidth: 0.5)
+                        )
                     
                     Image(systemName: tool.icon)
-                        .font(.system(size: 16))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(tool.color.opacity(0.9))
+                        .shadow(color: tool.color.opacity(0.3), radius: 4, x: 0, y: 0)
                 }
-                .frame(width: 36, height: 36)
+                .frame(width: 40, height: 40)
                 
+                // 2. Text Labels
                 VStack(alignment: .center, spacing: 2) {
                     Text(tool.rawValue)
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: 11.5, weight: .bold))
                         .foregroundColor(.primary.opacity(0.9))
                     Text(tool.description)
                         .font(.system(size: 9))
@@ -172,25 +177,64 @@ struct ToolGridItem: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, 16)
             .padding(.horizontal, 6)
+            // 3. Liquid Glass Card Body
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [Color.white.opacity(0.3), Color.white.opacity(0.05)]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 0.5
+                ZStack {
+                    // Base Material
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.white.opacity(colorScheme == .dark ? 0.03 : 0.1))
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    
+                    // Surface Gloss (Diagonal Sheen)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.white.opacity(isHovering ? 0.4 : 0.2),
+                                    Color.clear
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
                             )
-                    )
-                    .shadow(color: Color.black.opacity(isHovering ? 0.1 : 0.05), radius: isHovering ? 6 : 2, x: 0, y: isHovering ? 3 : 1)
+                        )
+                    
+                    // Hover Glow
+                    if isHovering {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(tool.color.opacity(0.05))
+                            .transition(.opacity)
+                    }
+                }
             )
-            .scaleEffect(isHovering ? 1.03 : 1.0)
+            // 4. Double Precision Border
+            .overlay(
+                ZStack {
+                    // Outer structural edge
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.black.opacity(colorScheme == .dark ? 0.4 : 0.08), lineWidth: 0.5)
+                    
+                    // Inner liquid light edge
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.white.opacity(isHovering ? 0.9 : 0.7), // Sharp highlight
+                                    Color.white.opacity(0.1),
+                                    Color.white.opacity(0.0),
+                                    Color.white.opacity(0.3)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.2
+                        )
+                }
+            )
+            .shadow(color: Color.black.opacity(isHovering ? 0.15 : 0.08), radius: isHovering ? 12 : 5, x: 0, y: isHovering ? 6 : 2)
+            .scaleEffect(isHovering ? 1.04 : 1.0)
+            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isHovering)
         }
         .buttonStyle(PlainButtonStyle())
         .onHover { isHovering = $0 }
@@ -242,7 +286,7 @@ struct ToolDetailContainer: View {
                 .padding(20)
             }
         }
-        .background(AcrylicBackground())
+        .background(AcrylicBackground(radius: 16))
         .cornerRadius(0) 
         .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: -5)
     }
@@ -987,7 +1031,7 @@ struct ClipboardHistoryToolView: View {
             HStack(alignment: .center, spacing: 12) {
                 // Source App Icon
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(Color(NSColor.controlBackgroundColor).opacity(0.3))
                     
                     if let bundleId = item.bundleId, let icon = getAppIcon(bundleId: bundleId) {
@@ -995,7 +1039,8 @@ struct ClipboardHistoryToolView: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .padding(3)
-                    } else {
+                    }
+                    else {
                         Image(systemName: "doc.text")
                             .font(.system(size: 11))
                             .foregroundColor(.secondary.opacity(0.6))
@@ -1046,18 +1091,27 @@ struct ClipboardHistoryToolView: View {
                 ZStack {
                     if isSelected {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.blue.opacity(0.1))
+                            .fill(Color.blue.opacity(0.12))
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.blue.opacity(0.35), lineWidth: 1)
                     } else {
+                        // Liquid Glass Style
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                    }
-                    
-                    if isSelected {
+                            .fill(Color.white.opacity(colorScheme == .dark ? 0.02 : 0.05))
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-                    } else {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                            .fill(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.2), Color.clear]), startPoint: .topLeading, endPoint: .bottomTrailing))
+                        
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05), lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(
+                                    LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.6), Color.white.opacity(0.1)]), startPoint: .topLeading, endPoint: .bottomTrailing),
+                                    lineWidth: 1
+                                )
+                        }
                     }
                 }
             )

@@ -144,8 +144,7 @@ struct SideNoteView: View {
     var body: some View {
         ZStack {
             // Background - Liquid Glass Style
-            AcrylicBackground()
-                .cornerRadius(20)
+            AcrylicBackground(radius: 20)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
@@ -283,7 +282,7 @@ struct NoteEditorView: View {
             .padding(12)
             .background(Color(NSColor.controlBackgroundColor).opacity(0.2))
         }
-        .background(AcrylicBackground().cornerRadius(20))
+        .background(AcrylicBackground(radius: 20))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 0.5))
     }
 }
@@ -351,6 +350,7 @@ struct NoteRow: View {
     var onToggle: () -> Void
     var onDelete: () -> Void
     @State private var isHovering = false
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -365,9 +365,8 @@ struct NoteRow: View {
             
             // Content
             VStack(alignment: .leading, spacing: 4) {
-                // Using LocalizedStringKey to trigger Markdown parsing
                 Text(LocalizedStringKey(note.content))
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .medium))
                     .strikethrough(note.isCompleted)
                     .foregroundColor(note.isCompleted ? .secondary : .primary.opacity(0.9))
                     .fixedSize(horizontal: false, vertical: true)
@@ -396,13 +395,17 @@ struct NoteRow: View {
         .background(
             ZStack {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                    .fill(Color.white.opacity(colorScheme == .dark ? 0.02 : 0.05))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 
-                if isHovering {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
-                        .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-                }
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.2), Color.clear]), startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
+        )
+        .overlay(
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.6), Color.white.opacity(0.1)]), startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
             }
         )
         .onHover { isHovering = $0 }

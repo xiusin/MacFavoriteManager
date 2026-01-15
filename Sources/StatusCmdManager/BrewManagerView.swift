@@ -61,7 +61,7 @@ struct BrewManagerView: View {
         .onAppear {
             viewModel.refreshBrewServices()
         }
-        .background(AcrylicBackground())
+        .background(AcrylicBackground(radius: 16))
     }
     
     struct SegmentButton: View {
@@ -207,8 +207,8 @@ struct StoreItemRow: View {
             }
             
             Text(name)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.primary.opacity(0.8))
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.primary.opacity(0.9))
             
             Spacer()
             
@@ -217,7 +217,7 @@ struct StoreItemRow: View {
                     viewModel.uninstallBrewService(BrewService(name: name))
                 }) {
                     Text("卸载")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 11, weight: .bold))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 6)
                         .background(
@@ -225,10 +225,10 @@ struct StoreItemRow: View {
                                 Capsule()
                                     .fill(Color.red.opacity(0.1))
                                 Capsule()
-                                    .stroke(Color.red.opacity(0.2), lineWidth: 0.5)
+                                    .stroke(Color.red.opacity(0.3), lineWidth: 1)
                             }
                         )
-                        .foregroundColor(.red.opacity(0.8))
+                        .foregroundColor(.red.opacity(0.9))
                 }
                 .buttonStyle(PlainButtonStyle())
             } else {
@@ -242,31 +242,32 @@ struct StoreItemRow: View {
                         .background(
                             ZStack {
                                 Capsule()
-                                    .fill(Color.blue.opacity(0.8))
+                                    .fill(LinearGradient(gradient: Gradient(colors: [Color.blue.opacity(0.9), Color.blue.opacity(0.7)]), startPoint: .top, endPoint: .bottom))
                                 Capsule()
-                                    .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                                    .stroke(Color.white.opacity(0.3), lineWidth: 1)
                             }
                         )
                         .foregroundColor(.white)
+                        .shadow(color: Color.blue.opacity(0.2), radius: 3, x: 0, y: 2)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
         }
         .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                gradient: Gradient(colors: [Color.white.opacity(0.5), Color.white.opacity(0.1)]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.5
-                        )
-                )
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.white.opacity(colorScheme == .dark ? 0.02 : 0.05))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.2), Color.clear]), startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
+        )
+        .overlay(
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.6), Color.white.opacity(0.1)]), startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+            }
         )
     }
 }
@@ -290,24 +291,25 @@ struct BrewServiceRow: View {
             // Status Dot
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.1))
-                    .frame(width: 14, height: 14)
-                    .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 0.5))
+                    .fill(Color.white.opacity(0.15))
+                    .frame(width: 16, height: 16)
+                    .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
                 
                 Circle()
                     .fill(statusColor)
                     .frame(width: 6, height: 6)
-                    .shadow(color: statusColor.opacity(0.6), radius: 2, x: 0, y: 0)
+                    .shadow(color: statusColor.opacity(0.8), radius: 3, x: 0, y: 0)
             }
             
             // Info
             VStack(alignment: .leading, spacing: 2) {
                 Text(service.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.primary.opacity(0.9))
                 HStack(spacing: 4) {
                     Text(service.status.capitalized)
                         .font(.caption2)
+                        .bold()
                         .foregroundColor(statusColor)
                     if let user = service.user {
                         Text("•")
@@ -315,7 +317,7 @@ struct BrewServiceRow: View {
                             .foregroundColor(.secondary.opacity(0.5))
                         Text(user)
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.secondary.opacity(0.8))
                     }
                 }
             }
@@ -331,19 +333,19 @@ struct BrewServiceRow: View {
         }
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                gradient: Gradient(colors: [Color.white.opacity(0.5), Color.white.opacity(0.1)]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.5
-                        )
-                )
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.white.opacity(colorScheme == .dark ? 0.02 : 0.05))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.2), Color.clear]), startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
+        )
+        .overlay(
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(LinearGradient(gradient: Gradient(colors: [Color.white.opacity(0.6), Color.white.opacity(0.1)]), startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+            }
         )
     }
 }

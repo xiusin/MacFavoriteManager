@@ -50,7 +50,7 @@ struct JsonDetailView: View {
     var body: some View {
         ZStack {
             // Liquid Glass Background
-            AcrylicBackground()
+            AcrylicBackground(radius: 16)
             
             VStack(spacing: 0) {
                 // Header / Drag Area
