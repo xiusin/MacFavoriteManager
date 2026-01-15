@@ -231,36 +231,55 @@ struct ChatBubble: View {
     var isUser: Bool { message.role == .user }
     
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .bottom, spacing: 10) {
             if isUser { Spacer() }
             
             if !isUser {
-                // AI Icon
-                Circle()
-                    .fill(LinearGradient(gradient: Gradient(colors: [.blue.opacity(0.3), .purple.opacity(0.3)]), startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 26, height: 26)
-                    .overlay(Image(systemName: "sparkles").font(.system(size: 11)).foregroundColor(.white))
+                // Neumorphic AI Icon
+                ZStack {
+                    Circle()
+                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.6))
+                        .shadow(color: Color.white.opacity(colorScheme == .dark ? 0.05 : 0.8), radius: 1, x: -1, y: -1)
+                        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 2, y: 2)
+                    
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11))
+                        .foregroundColor(.indigo.opacity(0.8))
+                }
+                .frame(width: 28, height: 28)
             }
             
             Text(message.content + (shouldShowCursor ? " ▋" : ""))
-                .font(.system(size: 12.5))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
+                .font(.system(size: 13, weight: .regular, design: .default))
+                .lineSpacing(4)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
                 .foregroundColor(isUser ? .white : .primary.opacity(0.9))
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    ConversationalBubbleShape(isUser: isUser)
                         .fill(
-                            isUser ? Color.blue.opacity(0.85) : Color.white.opacity(colorScheme == .dark ? 0.05 : 0.4)
+                            isUser ?
+                            LinearGradient(gradient: Gradient(colors: [Color.blue.opacity(0.9), Color.blue.opacity(0.8)]), startPoint: .topLeading, endPoint: .bottomTrailing) :
+                            LinearGradient(gradient: Gradient(colors: [Color(NSColor.controlBackgroundColor).opacity(0.6), Color(NSColor.controlBackgroundColor).opacity(0.4)]), startPoint: .topLeading, endPoint: .bottomTrailing)
                         )
                 )
+                // Neumorphic Depth
+                .shadow(
+                    color: isUser ? Color.blue.opacity(0.3) : Color.black.opacity(0.05),
+                    radius: 3, x: 0, y: 2
+                )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(isUser ? 0.2 : 0.1), lineWidth: 0.5)
+                    ConversationalBubbleShape(isUser: isUser)
+                        .stroke(
+                            isUser ? Color.white.opacity(0.2) : Color.white.opacity(0.4),
+                            lineWidth: 0.5
+                        )
                 )
                 .textSelection(.enabled)
             
             if !isUser { Spacer() }
         }
+        .padding(.vertical, 2)
     }
     
     var shouldShowCursor: Bool {
@@ -279,14 +298,56 @@ struct LoadingBubble: View {
         }
         .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            ConversationalBubbleShape(isUser: false)
                 .fill(Color.white.opacity(0.05))
+        )
+        .overlay(
+            ConversationalBubbleShape(isUser: false)
+                .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
         )
         .onAppear {
             withAnimation(Animation.linear(duration: 0.6).repeatForever()) {
                 isAnimating = true
             }
         }
+    }
+}
+
+// MARK: - Shapes
+struct ConversationalBubbleShape: Shape {
+    var isUser: Bool
+    
+    func path(in rect: CGRect) -> Path {
+        let radius: CGFloat = 18
+        let tailRadius: CGFloat = 4
+        
+        var path = Path()
+        
+        let tl: CGFloat = radius
+        let tr: CGFloat = radius
+        let br: CGFloat = isUser ? tailRadius : radius
+        let bl: CGFloat = isUser ? radius : tailRadius
+        
+        // Start Top Left
+        path.move(to: CGPoint(x: 0, y: tl))
+        
+        // Top Left
+        path.addArc(center: CGPoint(x: tl, y: tl), radius: tl, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+        
+        // Top Right
+        path.addLine(to: CGPoint(x: rect.width - tr, y: 0))
+        path.addArc(center: CGPoint(x: rect.width - tr, y: tr), radius: tr, startAngle: .degrees(270), endAngle: .degrees(0), clockwise: false)
+        
+        // Bottom Right
+        path.addLine(to: CGPoint(x: rect.width, y: rect.height - br))
+        path.addArc(center: CGPoint(x: rect.width - br, y: rect.height - br), radius: br, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+        
+        // Bottom Left
+        path.addLine(to: CGPoint(x: bl, y: rect.height))
+        path.addArc(center: CGPoint(x: bl, y: rect.height - bl), radius: bl, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+        
+        path.closeSubpath()
+        return path
     }
 }
 
