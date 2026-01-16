@@ -312,13 +312,13 @@ struct MacMarkdownPreview: NSViewRepresentable {
         
         // Use AttributedString for initial parse
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
-        guard var attrStr = try? AttributedString(markdown: processed, options: options) else {
+        guard let attrStr = try? AttributedString(markdown: processed, options: options) else {
             textView.string = processed
             return
         }
         
         // Final layout styling
-        var nsAttrStr = NSMutableAttributedString(attrStr)
+        let nsAttrStr = NSMutableAttributedString(attrStr)
         let fullRange = NSRange(location: 0, length: nsAttrStr.length)
         
         let defaultPara = NSMutableParagraphStyle()

@@ -257,7 +257,7 @@ struct AIRichTextRenderer: NSViewRepresentable {
     
     private func parseMarkdown(_ text: String) -> NSAttributedString {
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
-        guard var attrStr = try? AttributedString(markdown: text, options: options) else {
+        guard let attrStr = try? AttributedString(markdown: text, options: options) else {
             return NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor])
         }
         
@@ -313,9 +313,25 @@ struct ThinkingBubble: View {
 }
 
 struct GlassInputBackground: View {
+    @Environment(\.colorScheme) var colorScheme
     var body: some View {
-        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.black.opacity(0.05))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+        ZStack {
+            // 1. 基础凹陷色块
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.black.opacity(colorScheme == .dark ? 0.25 : 0.08))
+            
+            // 2. 顶部/左侧内阴影 (核心拟物感)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.black.opacity(colorScheme == .dark ? 0.4 : 0.15), lineWidth: 2)
+                .blur(radius: 2)
+                .offset(x: 0, y: 1)
+                .mask(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(LinearGradient(gradient: Gradient(colors: [.clear, .black]), startPoint: .bottom, endPoint: .top)))
+            
+            // 3. 底部高光外沿
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.white.opacity(colorScheme == .dark ? 0.1 : 0.4), lineWidth: 0.5)
+                .offset(y: 0.5)
+        }
     }
 }
 
