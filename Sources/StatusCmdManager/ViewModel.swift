@@ -145,6 +145,12 @@ class AppViewModel: ObservableObject {
             let aiMsgId = UUID()
             let aiMsg = AIChatMessage(id: aiMsgId, role: .assistant, content: "")
             
+            // Prepare Messages with Context
+            var history = chatMessages.suffix(10).map { $0 }
+            if !chatSettings.systemPrompt.isEmpty {
+                history.insert(AIChatMessage(role: .system, content: chatSettings.systemPrompt), at: 0)
+            }
+            
             await MainActor.run {
                 self.chatMessages.append(aiMsg)
                 self.isChatSending = true
@@ -152,15 +158,31 @@ class AppViewModel: ObservableObject {
             
             do {
                 var fullContent = ""
-                for try await chunk in AIService.stream(provider: provider, apiKey: apiKey, model: model, messages: chatMessages.dropLast(), baseUrl: baseUrl) {
+                var lastUpdate = Date()
+                
+                for try await chunk in AIService.stream(provider: provider, apiKey: apiKey, model: model, messages: history, baseUrl: baseUrl) {
                     fullContent += chunk
-                    await MainActor.run {
-                        if let index = self.chatMessages.firstIndex(where: { $0.id == aiMsgId }) {
-                            self.chatMessages[index].content = fullContent
+                    
+                    // 性能优化：限制刷新频率，避免打字机效果太快导致主线程卡死
+                    if Date().timeIntervalSince(lastUpdate) > 0.03 { 
+                        let currentContent = fullContent
+                        await MainActor.run {
+                            if let index = self.chatMessages.firstIndex(where: { $0.id == aiMsgId }) {
+                                self.chatMessages[index].content = currentContent
+                            }
                         }
+                        lastUpdate = Date()
                     }
                 }
-                await MainActor.run { self.isChatSending = false }
+                
+                // 确保最后一次更新
+                let finalContent = fullContent
+                await MainActor.run {
+                    if let index = self.chatMessages.firstIndex(where: { $0.id == aiMsgId }) {
+                        self.chatMessages[index].content = finalContent
+                    }
+                    self.isChatSending = false
+                }
             } catch {
                 await MainActor.run {
                     self.isChatSending = false
@@ -523,7 +545,7 @@ class AIService {
             Task {
                 do {
                     switch provider {
-                    case .openai, .deepseek, .custom:
+                    case .openai, .deepseek, .openrouter, .custom:
                         try await streamOpenAICompatible(provider: provider, apiKey: apiKey, model: model, messages: messages, baseUrl: baseUrl, continuation: continuation)
                     case .claude:
                         try await streamClaude(apiKey: apiKey, model: model, messages: messages, continuation: continuation)
@@ -545,7 +567,12 @@ class AIService {
             if baseUrl.contains("/chat/completions") { finalUrl = URL(string: baseUrl) }
             else { finalUrl = URL(string: baseUrl)?.appendingPathComponent("chat/completions") }
         } else {
-            let defaultString = provider == .deepseek ? "https://api.deepseek.com/v1/chat/completions" : "https://api.openai.com/v1/chat/completions"
+            let defaultString: String
+            switch provider {
+            case .deepseek: defaultString = "https://api.deepseek.com/v1/chat/completions"
+            case .openrouter: defaultString = "https://openrouter.ai/api/v1/chat/completions"
+            default: defaultString = "https://api.openai.com/v1/chat/completions"
+            }
             finalUrl = URL(string: defaultString)
         }
         

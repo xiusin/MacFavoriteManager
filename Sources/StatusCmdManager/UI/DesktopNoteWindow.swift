@@ -28,8 +28,8 @@ class DesktopNoteWindowController: NSObject, ObservableObject, NSWindowDelegate 
         let screenRect = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let initialX = initialNote.x ?? Double(screenRect.midX - 150)
         let initialY = initialNote.y ?? Double(screenRect.midY - 125)
-        let initialW = initialNote.width ?? 300
-        let initialH = initialNote.height ?? 250
+        let initialW = note.width ?? 300
+        let initialH = note.height ?? 250
         
         let initialRect = NSRect(x: initialX, y: initialY, width: initialW, height: initialH)
         
@@ -117,19 +117,15 @@ struct DesktopNoteView: View {
     
     var body: some View {
         ZStack {
-            // MARK: - Liquid Glass Background
             GeometryReader { geo in
                 ZStack {
-                    // 1. Dynamic Blur Base
                     VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow, state: .active, cornerRadius: controller.note.cornerRadius)
                         .clipShape(RoundedRectangle(cornerRadius: controller.note.cornerRadius, style: .continuous))
                         .opacity(min(1.0, controller.note.blurRadius / 20.0))
                     
-                    // 2. Tint Color Overlay
                     RoundedRectangle(cornerRadius: controller.note.cornerRadius, style: .continuous)
                         .fill(tintColor.opacity(controller.note.tintOpacity))
                     
-                    // 3. Glass Highlights
                     RoundedRectangle(cornerRadius: controller.note.cornerRadius, style: .continuous)
                         .strokeBorder(
                             LinearGradient(
@@ -145,7 +141,6 @@ struct DesktopNoteView: View {
                             lineWidth: 1.5
                         )
                     
-                    // 4. Subtle Inner Glow
                     RoundedRectangle(cornerRadius: controller.note.cornerRadius, style: .continuous)
                         .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                         .padding(1)
@@ -153,7 +148,6 @@ struct DesktopNoteView: View {
             }
             .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 8)
             
-            // MARK: - Content Layer
             ZStack(alignment: .topLeading) {
                 if isEditing {
                     MacTransparentTextView(text: $content, font: .systemFont(ofSize: 15, weight: .regular))
@@ -162,7 +156,6 @@ struct DesktopNoteView: View {
                         .padding(.bottom, 12)
                         .onChange(of: content) { newVal in controller.updateContent(newVal) }
                 } else {
-                    // Native AppKit Markdown Preview for perfect list/indentation support
                     MacMarkdownPreview(content: controller.note.content)
                         .padding(.top, 44)
                         .padding(.horizontal, 16)
@@ -177,7 +170,6 @@ struct DesktopNoteView: View {
                 }
             }
             
-            // MARK: - Floating Toolbar
             VStack {
                 if isHovering || isEditing || showColorPicker || showSettings {
                     toolbarView
@@ -207,7 +199,6 @@ struct DesktopNoteView: View {
         .onHover { isHovering = $0 }
         .onAppear { content = controller.note.content }
         .onChange(of: controller.note.content) { newVal in if !isEditing && content != newVal { content = newVal } }
-        // Clicking background to dismiss popups
         .onTapGesture {
             if showSettings { withAnimation { showSettings = false } }
             if showColorPicker { withAnimation { showColorPicker = false } }
@@ -224,12 +215,10 @@ struct DesktopNoteView: View {
             Spacer()
             
             HStack(spacing: 4) {
-                // Lock
                 LiquidToolButton(icon: controller.note.isLocked ? "lock.fill" : "lock.open", color: controller.note.isLocked ? .orange : .secondary, isActive: controller.note.isLocked) {
                     toggleLock()
                 }
                 
-                // Settings (Blur/Tint/Corner)
                 LiquidToolButton(icon: "slider.horizontal.3", color: .primary, isActive: showSettings) {
                     withAnimation { showSettings.toggle(); showColorPicker = false }
                 }
@@ -241,13 +230,12 @@ struct DesktopNoteView: View {
                                 opacity: Binding(get: { controller.note.tintOpacity }, set: { controller.updateStyle(blur: controller.note.blurRadius, opacity: $0, corner: controller.note.cornerRadius) }),
                                 corner: Binding(get: { controller.note.cornerRadius }, set: { controller.updateStyle(blur: controller.note.blurRadius, opacity: controller.note.tintOpacity, corner: $0) })
                             )
-                            .offset(y: 130) // Push down
+                            .offset(y: 130)
                             .zIndex(100)
                         }
                     }, alignment: .center
                 )
                 
-                // Color Picker
                 LiquidToolButton(icon: "paintpalette.fill", color: tintColor, isActive: showColorPicker) {
                     withAnimation { showColorPicker.toggle(); showSettings = false }
                 }
@@ -264,13 +252,11 @@ struct DesktopNoteView: View {
                     }, alignment: .center
                 )
                 
-                // Edit
                 LiquidToolButton(icon: isEditing ? "checkmark" : "pencil", color: isEditing ? .blue : .secondary, isActive: isEditing) {
                     if isEditing { saveContent() }
                     withAnimation(.spring()) { isEditing.toggle() }
                 }
                 
-                // Dock
                 LiquidToolButton(icon: "pip.exit", color: .secondary) { dockNote() }
             }
             .padding(4)
@@ -278,7 +264,6 @@ struct DesktopNoteView: View {
         }
     }
     
-    // MARK: - Actions
     var tintColor: Color { getColor(controller.note.color) }
     func getColor(_ name: String) -> Color {
         switch name {
@@ -299,7 +284,7 @@ struct DesktopNoteView: View {
     }
 }
 
-// MARK: - Components
+// MARK: - Refined Components
 
 struct MacMarkdownPreview: NSViewRepresentable {
     let content: String
@@ -307,80 +292,81 @@ struct MacMarkdownPreview: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
         scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = false
+        scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         
         let textView = scrollView.documentView as! NSTextView
         textView.drawsBackground = false
         textView.backgroundColor = .clear
-        textView.isEditable = false // Read-only
+        textView.isEditable = false
         textView.isSelectable = true
-        
-        // Critical for correct layout
-        textView.textContainer?.widthTracksTextView = true
-        textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainerInset = NSSize(width: 0, height: 0)
-        
         return scrollView
     }
     
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         let textView = scrollView.documentView as! NSTextView
-        
-        // Pre-process checkboxes
         let processed = content
             .replacingOccurrences(of: "- [ ]", with: "☐")
             .replacingOccurrences(of: "- [x]", with: "☑")
         
-        // Use NSAttributedString with markdown parsing (macOS 12+)
-        // This handles lists (bullets, numbering) correctly via NSParagraphStyle
-        if let attributed = try? NSMutableAttributedString(markdown: processed, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)) {
-            
-            // Apply Base Font and Color to entire range to ensure visibility
-            let fullRange = NSRange(location: 0, length: attributed.length)
-            
-            attributed.enumerateAttribute(.font, in: fullRange, options: []) { value, range, _ in
-                // If it has a font (like header), keep it but maybe scale it?
-                // If nil, set default.
-                if value == nil {
-                    attributed.addAttribute(.font, value: NSFont.systemFont(ofSize: 15, weight: .regular), range: range)
+        // Use AttributedString for initial parse
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
+        guard var attrStr = try? AttributedString(markdown: processed, options: options) else {
+            textView.string = processed
+            return
+        }
+        
+        // Final layout styling
+        var nsAttrStr = NSMutableAttributedString(attrStr)
+        let fullRange = NSRange(location: 0, length: nsAttrStr.length)
+        
+        let defaultPara = NSMutableParagraphStyle()
+        defaultPara.lineSpacing = 6
+        defaultPara.paragraphSpacing = 12
+        
+        nsAttrStr.addAttribute(.foregroundColor, value: NSColor.labelColor.withAlphaComponent(0.9), range: fullRange)
+        nsAttrStr.addAttribute(.font, value: NSFont.systemFont(ofSize: 15, weight: .regular), range: fullRange)
+        nsAttrStr.addAttribute(.paragraphStyle, value: defaultPara, range: fullRange)
+        
+        // Manual styling based on existing attributes
+        let presentationIntentKey = NSAttributedString.Key("presentationIntent")
+        let inlinePresentationIntentKey = NSAttributedString.Key("inlinePresentationIntent")
+        
+        nsAttrStr.enumerateAttribute(presentationIntentKey, in: fullRange, options: []) { value, range, _ in
+            if let intent = value as? PIIntent {
+                for component in intent.components {
+                    switch component.kind {
+                    case .header(let level):
+                        let size: CGFloat = level == 1 ? 26 : (level == 2 ? 20 : 18)
+                        nsAttrStr.addAttribute(.font, value: NSFont.systemFont(ofSize: size, weight: .bold), range: range)
+                    case .listItem:
+                        let lPara = defaultPara.mutableCopy() as! NSMutableParagraphStyle
+                        lPara.headIndent = 28
+                        lPara.firstLineHeadIndent = 0
+                        lPara.tabStops = [NSTextTab(textAlignment: .left, location: 28, options: [:])]
+                        nsAttrStr.addAttribute(.paragraphStyle, value: lPara, range: range)
+                    default: break
+                    }
                 }
             }
-            
-            // Force primary text color (adaptive to light/dark mode)
-            attributed.addAttribute(.foregroundColor, value: NSColor.labelColor.withAlphaComponent(0.9), range: fullRange)
-            
-            // Fix List Indentation & Line Spacing manually
-            // Markdown usually sets some paragraph style, but we enforce consistent spacing
-            let defaultPara = NSMutableParagraphStyle()
-            defaultPara.lineSpacing = 4
-            defaultPara.paragraphSpacing = 8
-            
-            // Enumerate to preserve existing list styles but fix indentation
-            attributed.enumerateAttribute(.paragraphStyle, in: fullRange, options: []) { value, range, _ in
-                let para = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle ?? defaultPara
-                
-                // Check if the paragraph style has text lists (bullets)
-                if !para.textLists.isEmpty {
-                    // It is a list
-                    para.headIndent = 24 // Indent wrapped lines
-                    para.firstLineHeadIndent = 0 // Bullet stays left
-                    // Ensure tab stops exist for the bullet spacing
-                    para.tabStops = [NSTextTab(textAlignment: .left, location: 24, options: [:])]
-                }
-                
-                para.lineSpacing = 4
-                attributed.addAttribute(.paragraphStyle, value: para, range: range)
+        }
+        
+        nsAttrStr.enumerateAttribute(inlinePresentationIntentKey, in: fullRange, options: []) { value, range, _ in
+            if let intent = value as? InlinePresentationIntent, intent.contains(.code) {
+                nsAttrStr.addAttribute(.font, value: NSFont.monospacedSystemFont(ofSize: 13, weight: .medium), range: range)
+                nsAttrStr.addAttribute(.backgroundColor, value: NSColor.labelColor.withAlphaComponent(0.05), range: range)
             }
-            
-            if textView.textStorage?.string != processed {
-                textView.textStorage?.setAttributedString(attributed)
-            }
-        } else {
-            textView.string = content
+        }
+        
+        if textView.attributedString() != nsAttrStr {
+            textView.textStorage?.setAttributedString(nsAttrStr)
         }
     }
 }
+
+// Internal Typealias for cleaner iteration
+typealias PIIntent = PresentationIntent
 
 struct VisualSettingsPopup: View {
     @Binding var blur: Double
@@ -390,30 +376,21 @@ struct VisualSettingsPopup: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("视觉调整").font(.caption).bold().foregroundColor(.secondary)
-            
             VStack(alignment: .leading, spacing: 4) {
                 Text("模糊 (Blur)").font(.caption2).foregroundColor(.secondary)
                 Slider(value: $blur, in: 0...40)
             }
-            
             VStack(alignment: .leading, spacing: 4) {
                 Text("浓度 (Tint)").font(.caption2).foregroundColor(.secondary)
                 Slider(value: $opacity, in: 0...1.0)
             }
-            
             VStack(alignment: .leading, spacing: 4) {
                 Text("圆角 (Corner)").font(.caption2).foregroundColor(.secondary)
                 Slider(value: $corner, in: 0...40)
             }
         }
-        .padding(12)
-        .frame(width: 180)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial)
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.2), lineWidth: 0.5))
-                .shadow(radius: 10)
-        )
+        .padding(12).frame(width: 180)
+        .background(RoundedRectangle(cornerRadius: 12).fill(.ultraThinMaterial).overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.2), lineWidth: 0.5)).shadow(radius: 10))
     }
 }
 

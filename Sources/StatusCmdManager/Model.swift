@@ -124,11 +124,11 @@ struct WebMetadata { var title: String?; var iconUrl: String? }
 
 // MARK: - AI Models
 enum AIProvider: String, Codable, CaseIterable, Identifiable {
-    case openai = "OpenAI", deepseek = "DeepSeek", claude = "Claude", gemini = "Gemini", custom = "Custom (API)"
+    case openai = "OpenAI", deepseek = "DeepSeek", claude = "Claude", gemini = "Gemini", openrouter = "OpenRouter", custom = "Custom (API)"
     var id: String { self.rawValue }
     var defaultModel: String {
         switch self {
-        case .openai: return "gpt-4o"; case .deepseek: return "deepseek-chat"; case .claude: return "claude-3-5-sonnet-20240620"; case .gemini: return "gemini-pro"; case .custom: return ""
+        case .openai: return "gpt-4o"; case .deepseek: return "deepseek-chat"; case .claude: return "claude-3-5-sonnet-20240620"; case .gemini: return "gemini-pro"; case .openrouter: return "xiaomi/mimo-v2-flash:free"; case .custom: return ""
         }
     }
 }
@@ -143,6 +143,8 @@ struct AIChatSettings: Codable {
     var apiKeys: [AIProvider: String] = [:]
     var selectedModels: [AIProvider: String] = [:]
     var customBaseUrls: [AIProvider: String] = [:]
+    var systemPrompt: String = "你是一个极客助手，回答简洁明了，专业高效。"
+    
     func getApiKey(for provider: AIProvider) -> String { apiKeys[provider] ?? "" }
     func getModel(for provider: AIProvider) -> String { selectedModels[provider] ?? provider.defaultModel }
     func getBaseUrl(for provider: AIProvider) -> String { customBaseUrls[provider] ?? "" }
