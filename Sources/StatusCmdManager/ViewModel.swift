@@ -7,6 +7,14 @@ struct NoteItem: Identifiable, Codable, Equatable {
     var isCompleted: Bool = false
     var createdAt: Date = Date()
     var color: String = "blue" // blue, red, orange, green, purple
+    
+    // Desktop Widget Properties
+    var x: Double?
+    var y: Double?
+    var width: Double?
+    var height: Double?
+    var isLocked: Bool = false
+    var isDesktopWidget: Bool = false
 }
 
 class AppViewModel: ObservableObject {
@@ -237,10 +245,12 @@ class AppViewModel: ObservableObject {
         saveNotes()
     }
     
-    func updateNote(_ note: NoteItem) {
+    func updateNote(_ note: NoteItem, saveImmediately: Bool = true) {
         if let index = notes.firstIndex(where: { $0.id == note.id }) {
             notes[index] = note
-            saveNotes()
+            if saveImmediately {
+                saveNotes()
+            }
         }
     }
     

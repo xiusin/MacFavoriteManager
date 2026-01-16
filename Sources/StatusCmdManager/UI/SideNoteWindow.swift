@@ -17,12 +17,55 @@ class SideNoteWindowController: ObservableObject {
     
     @Published var isVisible: Bool = false
     
+    // Desktop Notes Management
+    var desktopControllers: [UUID: DesktopNoteWindowController] = [:]
+    
     let windowWidth: CGFloat = 320
     let appViewModel = AppViewModel()
     
     init() {
         createWindow()
         startEdgeMonitoring()
+        // Restore desktop notes after a short delay to ensure UI is ready
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.restoreDesktopNotes()
+        }
+    }
+    
+    func restoreDesktopNotes() {
+        for note in appViewModel.notes where note.isDesktopWidget {
+            openDesktopNote(note)
+        }
+    }
+    
+    func toggleDesktopMode(for note: NoteItem) {
+        if note.isDesktopWidget {
+            // Currently open, so close it (dock it)
+            var updated = note
+            updated.isDesktopWidget = false
+            appViewModel.updateNote(updated)
+            closeDesktopNote(note)
+        } else {
+            // Open it
+            var updated = note
+            updated.isDesktopWidget = true
+            appViewModel.updateNote(updated)
+            openDesktopNote(updated)
+        }
+    }
+    
+    func openDesktopNote(_ note: NoteItem) {
+        if desktopControllers[note.id] == nil {
+            let controller = DesktopNoteWindowController(note: note, viewModel: appViewModel)
+            desktopControllers[note.id] = controller
+        }
+    }
+    
+    func closeDesktopNote(_ note: NoteItem) {
+        if let controller = desktopControllers[note.id] {
+            controller.closeWindow()
+            desktopControllers.removeValue(forKey: note.id)
+        }
     }
     
     private func createWindow() {
@@ -175,7 +218,47 @@ struct SideNoteView: View {
                             .foregroundColor(.primary.opacity(0.9))
                         Spacer()
                         
-                        // Add Button
+                        // Add Desktop Note Button
+                        Button(action: {
+                            // 1. Prepare Data
+                            let newNote = NoteItem(content: "双击编辑内容...", isDesktopWidget: true)
+                            
+                            // 2. Update Model (This triggers UI refresh)
+                            withAnimation(.spring()) {
+                                viewModel.addNote(content: newNote.content, color: newNote.color) // addNote inserts at 0
+                            }
+                            
+                            // 3. Open Window (Defer slightly to let data settle)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                // Find the note we just added (it's at index 0 or by content/time)
+                                // Since addNote generates a new ID internally inside ViewModel (look at ViewModel.addNote),
+                                // we actually need to capture that ID or correct how we add it.
+                                // Let's fix this by finding the most recent note.
+                                if let newest = viewModel.notes.first {
+                                    var updated = newest
+                                    updated.isDesktopWidget = true // Force desktop mode
+                                    // Update without animation to avoid double refresh issues
+                                    viewModel.updateNote(updated)
+                                    controller.openDesktopNote(updated)
+                                }
+                            }
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.orange.opacity(0.1))
+                                Image(systemName: "plus.rectangle.on.rectangle")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.orange.opacity(0.9))
+                            }
+                            .frame(width: 32, height: 32)
+                            .overlay(Circle().stroke(Color.orange.opacity(0.2), lineWidth: 0.5))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .help("新建桌面便签")
+                        
+                        Spacer().frame(width: 8)
+
+                        // Add List Note Button
                         Button(action: { withAnimation(.spring()) { isAddingNote = true } }) {
                             ZStack {
                                 Circle()
@@ -188,6 +271,7 @@ struct SideNoteView: View {
                             .overlay(Circle().stroke(Color.blue.opacity(0.2), lineWidth: 0.5))
                         }
                         .buttonStyle(PlainButtonStyle())
+                        .help("新建列表事项")
                         
                         Spacer().frame(width: 12)
                         
@@ -212,7 +296,10 @@ struct SideNoteView: View {
                                 }, onDelete: {
                                     withAnimation {
                                         viewModel.deleteNote(id: note.id)
+                                        controller.closeDesktopNote(note)
                                     }
+                                }, onDetach: {
+                                    controller.toggleDesktopMode(for: note)
                                 })
                             }
                         }
@@ -226,6 +313,7 @@ struct SideNoteView: View {
         .edgesIgnoringSafeArea(.all)
     }
 }
+
 
 struct NoteEditorView: View {
     var onCancel: () -> Void
@@ -349,6 +437,7 @@ struct NoteRow: View {
     let note: NoteItem
     var onToggle: () -> Void
     var onDelete: () -> Void
+    var onDetach: () -> Void
     @State private var isHovering = false
     @Environment(\.colorScheme) var colorScheme
     
@@ -379,14 +468,26 @@ struct NoteRow: View {
             
             Spacer(minLength: 0)
             
-            // Delete (Hover only)
+            // Actions (Hover only)
             if isHovering {
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 12))
-                        .foregroundColor(.red.opacity(0.7))
+                HStack(spacing: 8) {
+                    // Detach / Dock
+                    Button(action: onDetach) {
+                        Image(systemName: note.isDesktopWidget ? "pip.exit" : "pip.enter")
+                            .font(.system(size: 12))
+                            .foregroundColor(.blue.opacity(0.7))
+                            .help(note.isDesktopWidget ? "收回" : "桌面贴纸")
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Delete
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 12))
+                            .foregroundColor(.red.opacity(0.7))
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
                 .padding(.top, 2)
                 .transition(.opacity)
             }
