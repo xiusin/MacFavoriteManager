@@ -227,9 +227,26 @@ struct CoderView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous)) // Ensure content doesn't bleed
         }
         .onHover { isHovering = $0 }
+        .background(
+            // Shortcut Monitor
+            ShortcutMonitorView { event in
+                // Cmd + R to Run
+                if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "r" {
+                    runCode()
+                    return true
+                }
+                // Cmd + 1..8 to switch languages
+                if event.modifierFlags.contains(.command), let char = event.charactersIgnoringModifiers, let num = Int(char), num >= 1 && num <= Language.allCases.count {
+                    language = Language.allCases[num - 1]
+                    return true
+                }
+                return false
+            }
+        )
     }
     
     func runCode() {
+        if isRunning { return }
         isRunning = true
         output = "Compiling & Running..."
         
@@ -239,6 +256,29 @@ struct CoderView: View {
                 self.isRunning = false
             }
         }
+    }
+}
+
+// MARK: - Helper Views
+
+struct ShortcutMonitorView: NSViewRepresentable {
+    var onKeyDown: (NSEvent) -> Bool
+    func makeNSView(context: Context) -> NSView { ShortcutNSView(onKeyDown: onKeyDown) }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+    
+    class ShortcutNSView: NSView {
+        var onKeyDown: (NSEvent) -> Bool
+        init(onKeyDown: @escaping (NSEvent) -> Bool) {
+            self.onKeyDown = onKeyDown
+            super.init(frame: .zero)
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                if let self = self, self.window == event.window {
+                    if self.onKeyDown(event) { return nil }
+                }
+                return event
+            }
+        }
+        required init?(coder: NSCoder) { fatalError() }
     }
 }
 
@@ -315,6 +355,15 @@ struct CodeEditorView: NSViewRepresentable {
             guard let textView = notification.object as? NSTextView else { return }
             self.parent.text = textView.string
             highlightSyntax(textView: textView)
+            
+            // Automatic Completion Trigger
+            // Trigger if last character is alphanumeric to avoid popping up on spaces/symbols
+            if let lastChar = textView.string.last, lastChar.isLetter || lastChar.isNumber {
+                // Defer slightly to avoid interfering with current keystroke
+                DispatchQueue.main.async {
+                    textView.complete(nil)
+                }
+            }
         }
         
         // MARK: - Completion (Syntax Hinting)
