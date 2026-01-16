@@ -61,8 +61,14 @@ struct ToolsView: View {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(ToolType.allCases, id: \.self) { tool in
                             ToolGridItem(tool: tool) {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                    activeTool = tool
+                                if tool == .coder {
+                                    // Launch Coder Window directly
+                                    CoderWindowController.shared.show()
+                                } else {
+                                    // Show inline tool detail
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                        activeTool = tool
+                                    }
                                 }
                             }
                         }
@@ -101,6 +107,7 @@ enum ToolType: String, CaseIterable, Identifiable {
     case password = "密码"
     case md5 = "哈希"
     case encoder = "编解码"
+    case coder = "Coder"
     
     var id: String { rawValue }
     
@@ -112,6 +119,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         case .password: return "key.fill"
         case .md5: return "number.circle.fill"
         case .encoder: return "arrow.triangle.2.circlepath"
+        case .coder: return "terminal.fill"
         }
     }
     
@@ -123,6 +131,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         case .password: return .green
         case .md5: return .purple
         case .encoder: return .blue
+        case .coder: return .black
         }
     }
     
@@ -135,6 +144,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         case .password: return "随机生成"
         case .md5: return "MD5/SHA"
         case .encoder: return "Base64/URL"
+        case .coder: return "脚本运行器"
         }
     }
 }
@@ -281,6 +291,7 @@ struct ToolDetailContainer: View {
                     case .password: PasswordGeneratorView()
                     case .md5: HashCalculatorView()
                     case .encoder: EncoderDecoderView()
+                    case .coder: EmptyView() // Should not be reached
                     }
                 }
                 .padding(20)

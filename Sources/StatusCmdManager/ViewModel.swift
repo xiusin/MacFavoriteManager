@@ -15,6 +15,11 @@ struct NoteItem: Identifiable, Codable, Equatable {
     var height: Double?
     var isLocked: Bool = false
     var isDesktopWidget: Bool = false
+    
+    // Visual Customization
+    var blurRadius: Double = 20.0
+    var tintOpacity: Double = 0.2
+    var cornerRadius: Double = 15.0
 }
 
 class AppViewModel: ObservableObject {

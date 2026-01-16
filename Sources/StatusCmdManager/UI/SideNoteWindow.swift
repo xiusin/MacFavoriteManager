@@ -299,7 +299,9 @@ struct SideNoteView: View {
                                         controller.closeDesktopNote(note)
                                     }
                                 }, onDetach: {
-                                    controller.toggleDesktopMode(for: note)
+                                    DispatchQueue.main.async {
+                                        controller.toggleDesktopMode(for: note)
+                                    }
                                 })
                             }
                         }

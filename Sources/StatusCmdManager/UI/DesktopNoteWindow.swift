@@ -15,19 +15,21 @@ class DesktopNoteWindowController: NSObject, ObservableObject, NSWindowDelegate 
     @Published var note: NoteItem
     var viewModel: AppViewModel
     
-    // Debounce timer for saving position
     private var saveTimer: Timer?
     
     init(note: NoteItem, viewModel: AppViewModel) {
-        self.note = note
+        var initialNote = note
+        if initialNote.cornerRadius == 0 { initialNote.cornerRadius = 15.0 }
+        
+        self.note = initialNote
         self.viewModel = viewModel
         super.init()
         
         let screenRect = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let initialX = note.x ?? Double(screenRect.midX - 150)
-        let initialY = note.y ?? Double(screenRect.midY - 125)
-        let initialW = note.width ?? 300
-        let initialH = note.height ?? 250
+        let initialX = initialNote.x ?? Double(screenRect.midX - 150)
+        let initialY = initialNote.y ?? Double(screenRect.midY - 125)
+        let initialW = initialNote.width ?? 300
+        let initialH = initialNote.height ?? 250
         
         let initialRect = NSRect(x: initialX, y: initialY, width: initialW, height: initialH)
         
@@ -42,13 +44,8 @@ class DesktopNoteWindowController: NSObject, ObservableObject, NSWindowDelegate 
         window.backgroundColor = .clear
         window.isOpaque = false
         window.hasShadow = true
-        // Important: Setting this false allows the custom shape to define the shadow
         window.invalidateShadow()
         
-        // We handle moving manually via background view hit testing if needed, 
-        // but NSWindow.isMovableByWindowBackground = true is the easiest way for "click anywhere to drag".
-        // However, if we want to type, we need to be careful. 
-        // Actually, TextEditor usually captures mouse clicks.
         window.isMovableByWindowBackground = !note.isLocked
         window.delegate = self
         
@@ -64,20 +61,22 @@ class DesktopNoteWindowController: NSObject, ObservableObject, NSWindowDelegate 
         }
     }
     
-    // MARK: - Window Delegate
+    func windowDidMove(_ notification: Notification) { updatePosition(save: false); scheduleSave() }
+    func windowDidResize(_ notification: Notification) { updatePosition(save: false); scheduleSave() }
+    func windowDidEndLiveResize(_ notification: Notification) { updatePosition(save: true) }
     
-    func windowDidMove(_ notification: Notification) {
-        updatePosition(save: false)
+    func updateContent(_ newContent: String) {
+        self.note.content = newContent
+        viewModel.updateNote(self.note, saveImmediately: false)
         scheduleSave()
     }
     
-    func windowDidResize(_ notification: Notification) {
-        updatePosition(save: false)
+    func updateStyle(blur: Double, opacity: Double, corner: Double) {
+        self.note.blurRadius = blur
+        self.note.tintOpacity = opacity
+        self.note.cornerRadius = corner
+        viewModel.updateNote(self.note, saveImmediately: false)
         scheduleSave()
-    }
-    
-    func windowDidEndLiveResize(_ notification: Notification) {
-        updatePosition(save: true)
     }
     
     private func updatePosition(save: Bool) {
@@ -87,7 +86,6 @@ class DesktopNoteWindowController: NSObject, ObservableObject, NSWindowDelegate 
         updated.y = Double(window.frame.origin.y)
         updated.width = Double(window.frame.size.width)
         updated.height = Double(window.frame.size.height)
-        
         self.note = updated
         viewModel.updateNote(updated, saveImmediately: save)
     }
@@ -95,8 +93,7 @@ class DesktopNoteWindowController: NSObject, ObservableObject, NSWindowDelegate 
     private func scheduleSave() {
         saveTimer?.invalidate()
         saveTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
-            guard let self = self else { return }
-            self.viewModel.saveNotes()
+            self?.viewModel.saveNotes()
         }
     }
     
@@ -116,6 +113,7 @@ struct DesktopNoteView: View {
     @State private var content: String = ""
     @State private var isHovering: Bool = false
     @State private var showColorPicker: Bool = false
+    @State private var showSettings: Bool = false
     
     var body: some View {
         ZStack {
@@ -123,24 +121,16 @@ struct DesktopNoteView: View {
             GeometryReader { geo in
                 ZStack {
                     // 1. Dynamic Blur Base
-                    VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow, state: .active)
-                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow, state: .active, cornerRadius: controller.note.cornerRadius)
+                        .clipShape(RoundedRectangle(cornerRadius: controller.note.cornerRadius, style: .continuous))
+                        .opacity(min(1.0, controller.note.blurRadius / 20.0))
                     
-                    // 2. Tint Color Overlay (Liquid Layer)
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    tintColor.opacity(0.15),
-                                    tintColor.opacity(0.05)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                    // 2. Tint Color Overlay
+                    RoundedRectangle(cornerRadius: controller.note.cornerRadius, style: .continuous)
+                        .fill(tintColor.opacity(controller.note.tintOpacity))
                     
-                    // 3. Glass Highlights (Reflections)
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    // 3. Glass Highlights
+                    RoundedRectangle(cornerRadius: controller.note.cornerRadius, style: .continuous)
                         .strokeBorder(
                             LinearGradient(
                                 gradient: Gradient(colors: [
@@ -156,48 +146,40 @@ struct DesktopNoteView: View {
                         )
                     
                     // 4. Subtle Inner Glow
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    RoundedRectangle(cornerRadius: controller.note.cornerRadius, style: .continuous)
                         .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                         .padding(1)
                 }
             }
             .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 8)
             
-            // MARK: - Content Layer (Fills Screen)
+            // MARK: - Content Layer
             ZStack(alignment: .topLeading) {
                 if isEditing {
-                    // Fully Transparent Editor
                     MacTransparentTextView(text: $content, font: .systemFont(ofSize: 15, weight: .regular))
-                        .padding(.top, 44) // Avoid Toolbar
+                        .padding(.top, 44)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 12)
+                        .onChange(of: content) { newVal in controller.updateContent(newVal) }
                 } else {
-                    // Markdown Preview
-                    ScrollView(showsIndicators: false) {
-                        Text(LocalizedStringKey(controller.note.content))
-                            .font(.system(size: 15, weight: .regular, design: .rounded))
-                            .lineSpacing(4)
-                            .foregroundColor(.primary.opacity(0.9))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, 44) // Avoid Toolbar
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 24)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // Make entire area clickable to edit (Double tap)
-                    .contentShape(Rectangle()) 
-                    .onTapGesture(count: 2) {
-                        if !controller.note.isLocked {
-                            content = controller.note.content
-                            withAnimation(.spring()) { isEditing = true }
+                    // Native AppKit Markdown Preview for perfect list/indentation support
+                    MacMarkdownPreview(content: controller.note.content)
+                        .padding(.top, 44)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 24)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) {
+                            if !controller.note.isLocked {
+                                content = controller.note.content
+                                withAnimation(.spring()) { isEditing = true }
+                            }
                         }
-                    }
                 }
             }
             
-            // MARK: - Floating Toolbar (Top Layer)
+            // MARK: - Floating Toolbar
             VStack {
-                if isHovering || isEditing || showColorPicker {
+                if isHovering || isEditing || showColorPicker || showSettings {
                     toolbarView
                         .padding(.top, 8)
                         .padding(.horizontal, 8)
@@ -205,11 +187,10 @@ struct DesktopNoteView: View {
                 }
                 Spacer()
                 
-                // Resize Handle (Bottom Right)
                 if !controller.note.isLocked && isHovering {
                     HStack {
                         if isEditing {
-                            Text("Markdown")
+                            Text("Markdown Enabled")
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundColor(.secondary.opacity(0.4))
                                 .padding(.leading, 16)
@@ -225,16 +206,16 @@ struct DesktopNoteView: View {
         .edgesIgnoringSafeArea(.all)
         .onHover { isHovering = $0 }
         .onAppear { content = controller.note.content }
-        .onChange(of: controller.note.content) { newVal in
-            if !isEditing { content = newVal }
+        .onChange(of: controller.note.content) { newVal in if !isEditing && content != newVal { content = newVal } }
+        // Clicking background to dismiss popups
+        .onTapGesture {
+            if showSettings { withAnimation { showSettings = false } }
+            if showColorPicker { withAnimation { showColorPicker = false } }
         }
     }
     
-    // MARK: - Subviews
-    
     var toolbarView: some View {
         HStack(spacing: 8) {
-            // Drag Indicator
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundColor(.secondary.opacity(0.3))
@@ -244,306 +225,263 @@ struct DesktopNoteView: View {
             
             HStack(spacing: 4) {
                 // Lock
-                LiquidToolButton(
-                    icon: controller.note.isLocked ? "lock.fill" : "lock.open",
-                    color: controller.note.isLocked ? .orange : .secondary,
-                    isActive: controller.note.isLocked
-                ) {
+                LiquidToolButton(icon: controller.note.isLocked ? "lock.fill" : "lock.open", color: controller.note.isLocked ? .orange : .secondary, isActive: controller.note.isLocked) {
                     toggleLock()
                 }
                 
-                // Color Picker
-                ZStack {
-                    LiquidToolButton(icon: "paintpalette.fill", color: tintColor, isActive: showColorPicker) {
-                        withAnimation { showColorPicker.toggle() }
-                    }
-                    
-                    if showColorPicker {
-                        ColorPickerPopup(selectedColor: controller.note.color) { newColor in
-                            updateColor(newColor)
-                            withAnimation { showColorPicker = false }
-                        }
-                        .offset(x: -60, y: 35) // Adjust position to not fly off screen
-                        .zIndex(10)
-                    }
+                // Settings (Blur/Tint/Corner)
+                LiquidToolButton(icon: "slider.horizontal.3", color: .primary, isActive: showSettings) {
+                    withAnimation { showSettings.toggle(); showColorPicker = false }
                 }
+                .overlay(
+                    Group {
+                        if showSettings {
+                            VisualSettingsPopup(
+                                blur: Binding(get: { controller.note.blurRadius }, set: { controller.updateStyle(blur: $0, opacity: controller.note.tintOpacity, corner: controller.note.cornerRadius) }),
+                                opacity: Binding(get: { controller.note.tintOpacity }, set: { controller.updateStyle(blur: controller.note.blurRadius, opacity: $0, corner: controller.note.cornerRadius) }),
+                                corner: Binding(get: { controller.note.cornerRadius }, set: { controller.updateStyle(blur: controller.note.blurRadius, opacity: controller.note.tintOpacity, corner: $0) })
+                            )
+                            .offset(y: 130) // Push down
+                            .zIndex(100)
+                        }
+                    }, alignment: .center
+                )
                 
-                // Edit (Save/Done)
-                LiquidToolButton(
-                    icon: isEditing ? "checkmark" : "pencil",
-                    color: isEditing ? .blue : .secondary,
-                    isActive: isEditing
-                ) {
+                // Color Picker
+                LiquidToolButton(icon: "paintpalette.fill", color: tintColor, isActive: showColorPicker) {
+                    withAnimation { showColorPicker.toggle(); showSettings = false }
+                }
+                .overlay(
+                    Group {
+                        if showColorPicker {
+                            ColorPickerPopup(selectedColor: controller.note.color) { newColor in
+                                updateColor(newColor)
+                                withAnimation { showColorPicker = false }
+                            }
+                            .offset(y: 40)
+                            .zIndex(100)
+                        }
+                    }, alignment: .center
+                )
+                
+                // Edit
+                LiquidToolButton(icon: isEditing ? "checkmark" : "pencil", color: isEditing ? .blue : .secondary, isActive: isEditing) {
                     if isEditing { saveContent() }
                     withAnimation(.spring()) { isEditing.toggle() }
                 }
                 
                 // Dock
-                LiquidToolButton(icon: "pip.exit", color: .secondary) {
-                    dockNote()
-                }
+                LiquidToolButton(icon: "pip.exit", color: .secondary) { dockNote() }
             }
             .padding(4)
-            .background(
-                Capsule()
-                    .fill(Color.white.opacity(0.15))
-                    .background(VisualEffectBlur(material: .sidebar, blendingMode: .withinWindow, state: .active)) // Frosted glass toolbar
-            )
-            .overlay(
-                Capsule()
-                    .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
-            )
-            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
             .padding(.trailing, 8)
         }
     }
     
-    // MARK: - Helpers & Actions
-    
-    var tintColor: Color {
-        getColor(controller.note.color)
-    }
-    
+    // MARK: - Actions
+    var tintColor: Color { getColor(controller.note.color) }
     func getColor(_ name: String) -> Color {
         switch name {
-        case "red": return .red
-        case "orange": return .orange
-        case "green": return .green
-        case "purple": return .purple
-        case "gray": return .gray
-        case "pink": return .pink
-        case "yellow": return .yellow
-        default: return .blue
+        case "red": return .red; case "orange": return .orange; case "green": return .green; case "purple": return .purple; case "pink": return .pink; case "yellow": return .yellow; case "gray": return .gray; default: return .blue
         }
     }
-    
     func toggleLock() {
-        var updated = controller.note
-        updated.isLocked.toggle()
-        controller.updateNoteData(updated) // UI
-        viewModel.updateNote(updated)      // Data
+        var updated = controller.note; updated.isLocked.toggle(); controller.updateNoteData(updated); viewModel.updateNote(updated)
     }
-    
     func updateColor(_ color: String) {
-        var updated = controller.note
-        updated.color = color
-        controller.updateNoteData(updated)
-        viewModel.updateNote(updated)
+        var updated = controller.note; updated.color = color; controller.updateNoteData(updated); viewModel.updateNote(updated)
     }
-    
     func saveContent() {
-        var updated = controller.note
-        updated.content = content
-        viewModel.updateNote(updated)
+        var updated = controller.note; updated.content = content; viewModel.updateNote(updated)
     }
-    
     func dockNote() {
-        var updated = controller.note
-        updated.isDesktopWidget = false
-        viewModel.updateNote(updated)
-        controller.closeWindow()
+        var updated = controller.note; updated.isDesktopWidget = false; viewModel.updateNote(updated); controller.closeWindow()
     }
 }
 
 // MARK: - Components
 
-// Robust Transparent TextView
-struct MacTransparentTextView: NSViewRepresentable {
-    @Binding var text: String
-    var font: NSFont
+struct MacMarkdownPreview: NSViewRepresentable {
+    let content: String
     
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
         scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = false // Hidden scroller for clean look, or true if needed
+        scrollView.hasVerticalScroller = false
         scrollView.autohidesScrollers = true
         
         let textView = scrollView.documentView as! NSTextView
         textView.drawsBackground = false
-        textView.backgroundColor = .clear // Crucial
-        textView.delegate = context.coordinator
-        textView.font = font
-        textView.textColor = NSColor.labelColor
-        textView.allowsUndo = true
+        textView.backgroundColor = .clear
+        textView.isEditable = false // Read-only
+        textView.isSelectable = true
         
-        // Layout Config
-        textView.isRichText = false
-        textView.isHorizontallyResizable = false
-        textView.isVerticallyResizable = true
+        // Critical for correct layout
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
-        
-        // Remove default padding/inset issues
         textView.textContainerInset = NSSize(width: 0, height: 0)
         
         return scrollView
     }
     
-    func updateNSView(_ nsView: NSScrollView, context: Context) {
-        let textView = nsView.documentView as! NSTextView
-        if textView.string != text {
-            textView.string = text
-        }
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, NSTextViewDelegate {
-        var parent: MacTransparentTextView
-        init(_ parent: MacTransparentTextView) { self.parent = parent }
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        let textView = scrollView.documentView as! NSTextView
         
-        func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
-            self.parent.text = textView.string
-        }
-    }
-}
-
-struct LiquidToolButton: View {
-    let icon: String
-    var color: Color = .secondary
-    var isActive: Bool = false
-    let action: () -> Void
-    
-    @State private var isHovering = false
-    
-    var body: some View {
-        Button(action: action) {
-            ZStack {
-                Circle()
-                    .fill(isActive || isHovering ? color.opacity(0.15) : Color.clear)
+        // Pre-process checkboxes
+        let processed = content
+            .replacingOccurrences(of: "- [ ]", with: "☐")
+            .replacingOccurrences(of: "- [x]", with: "☑")
+        
+        // Use NSAttributedString with markdown parsing (macOS 12+)
+        // This handles lists (bullets, numbering) correctly via NSParagraphStyle
+        if let attributed = try? NSMutableAttributedString(markdown: processed, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)) {
+            
+            // Apply Base Font and Color to entire range to ensure visibility
+            let fullRange = NSRange(location: 0, length: attributed.length)
+            
+            attributed.enumerateAttribute(.font, in: fullRange, options: []) { value, range, _ in
+                // If it has a font (like header), keep it but maybe scale it?
+                // If nil, set default.
+                if value == nil {
+                    attributed.addAttribute(.font, value: NSFont.systemFont(ofSize: 15, weight: .regular), range: range)
+                }
+            }
+            
+            // Force primary text color (adaptive to light/dark mode)
+            attributed.addAttribute(.foregroundColor, value: NSColor.labelColor.withAlphaComponent(0.9), range: fullRange)
+            
+            // Fix List Indentation & Line Spacing manually
+            // Markdown usually sets some paragraph style, but we enforce consistent spacing
+            let defaultPara = NSMutableParagraphStyle()
+            defaultPara.lineSpacing = 4
+            defaultPara.paragraphSpacing = 8
+            
+            // Enumerate to preserve existing list styles but fix indentation
+            attributed.enumerateAttribute(.paragraphStyle, in: fullRange, options: []) { value, range, _ in
+                let para = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle ?? defaultPara
                 
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(isActive || isHovering ? color : .secondary.opacity(0.8))
+                // Check if the paragraph style has text lists (bullets)
+                if !para.textLists.isEmpty {
+                    // It is a list
+                    para.headIndent = 24 // Indent wrapped lines
+                    para.firstLineHeadIndent = 0 // Bullet stays left
+                    // Ensure tab stops exist for the bullet spacing
+                    para.tabStops = [NSTextTab(textAlignment: .left, location: 24, options: [:])]
+                }
+                
+                para.lineSpacing = 4
+                attributed.addAttribute(.paragraphStyle, value: para, range: range)
             }
-            .frame(width: 24, height: 24)
-            .contentShape(Circle())
+            
+            if textView.textStorage?.string != processed {
+                textView.textStorage?.setAttributedString(attributed)
+            }
+        } else {
+            textView.string = content
         }
-        .buttonStyle(PlainButtonStyle())
-        .onHover { isHovering = $0 }
     }
 }
 
-struct ColorPickerPopup: View {
-    let selectedColor: String
-    let onSelect: (String) -> Void
-    let colors = ["blue", "purple", "pink", "red", "orange", "yellow", "green", "gray"]
+struct VisualSettingsPopup: View {
+    @Binding var blur: Double
+    @Binding var opacity: Double
+    @Binding var corner: Double
     
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(colors, id: \.self) { colorName in
-                Circle()
-                    .fill(mapColor(colorName))
-                    .frame(width: 16, height: 16)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white, lineWidth: selectedColor == colorName ? 2 : 0)
-                            .shadow(radius: 1)
-                    )
-                    .onTapGesture {
-                        onSelect(colorName)
-                    }
+        VStack(alignment: .leading, spacing: 12) {
+            Text("视觉调整").font(.caption).bold().foregroundColor(.secondary)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("模糊 (Blur)").font(.caption2).foregroundColor(.secondary)
+                Slider(value: $blur, in: 0...40)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("浓度 (Tint)").font(.caption2).foregroundColor(.secondary)
+                Slider(value: $opacity, in: 0...1.0)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("圆角 (Corner)").font(.caption2).foregroundColor(.secondary)
+                Slider(value: $corner, in: 0...40)
             }
         }
-        .padding(8)
+        .padding(12)
+        .frame(width: 180)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(.ultraThinMaterial)
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.2), lineWidth: 0.5))
-                .shadow(radius: 5)
+                .shadow(radius: 10)
         )
     }
-    
-    func mapColor(_ name: String) -> Color {
-        switch name {
-        case "red": return .red
-        case "orange": return .orange
-        case "green": return .green
-        case "purple": return .purple
-        case "pink": return .pink
-        case "yellow": return .yellow
-        case "gray": return .gray
-        default: return .blue
-        }
+}
+
+struct LiquidToolButton: View {
+    let icon: String; var color: Color = .secondary; var isActive: Bool = false; let action: () -> Void
+    @State private var isHovering = false
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle().fill(isActive || isHovering ? color.opacity(0.15) : Color.clear)
+                Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundColor(isActive || isHovering ? color : .secondary.opacity(0.8))
+            }.frame(width: 24, height: 24).contentShape(Circle())
+        }.buttonStyle(PlainButtonStyle()).onHover { isHovering = $0 }
+    }
+}
+
+struct ColorPickerPopup: View {
+    let selectedColor: String; let onSelect: (String) -> Void
+    let colors = ["blue", "purple", "pink", "red", "orange", "yellow", "green", "gray"]
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(colors, id: \.self) { c in
+                Circle().fill(mapColor(c)).frame(width: 16, height: 16)
+                    .overlay(Circle().stroke(Color.white, lineWidth: selectedColor == c ? 2 : 0).shadow(radius: 1))
+                    .onTapGesture { onSelect(c) }
+            }
+        }.padding(8).background(RoundedRectangle(cornerRadius: 12).fill(.ultraThinMaterial).overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.2), lineWidth: 0.5)).shadow(radius: 5))
+    }
+    func mapColor(_ n: String) -> Color {
+        switch n { case "red": return .red; case "orange": return .orange; case "green": return .green; case "purple": return .purple; case "pink": return .pink; case "yellow": return .yellow; case "gray": return .gray; default: return .blue }
     }
 }
 
 struct VisualEffectBlur: NSViewRepresentable {
-    var material: NSVisualEffectView.Material
-    var blendingMode: NSVisualEffectView.BlendingMode
-    var state: NSVisualEffectView.State
-
+    var material: NSVisualEffectView.Material; var blendingMode: NSVisualEffectView.BlendingMode; var state: NSVisualEffectView.State; var cornerRadius: Double = 0
     func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = blendingMode
-        view.state = state
-        
-        // Fix for rounded corners on backing layer
-        view.wantsLayer = true
-        view.layer?.cornerRadius = 20
-        view.layer?.masksToBounds = true
-        
-        return view
+        let v = NSVisualEffectView(); v.material = material; v.blendingMode = blendingMode; v.state = state; v.wantsLayer = true; v.layer?.cornerRadius = cornerRadius; v.layer?.masksToBounds = true; return v
     }
+    func updateNSView(_ v: NSVisualEffectView, context: Context) { v.material = material; v.blendingMode = blendingMode; v.state = state; v.layer?.cornerRadius = cornerRadius }
+}
 
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        nsView.material = material
-        nsView.blendingMode = blendingMode
-        nsView.state = state
+struct MacTransparentTextView: NSViewRepresentable {
+    @Binding var text: String; var font: NSFont
+    func makeNSView(context: Context) -> NSScrollView {
+        let s = NSTextView.scrollableTextView(); s.drawsBackground = false; s.hasVerticalScroller = false; s.autohidesScrollers = true
+        let t = s.documentView as! NSTextView; t.drawsBackground = false; t.backgroundColor = .clear; t.delegate = context.coordinator; t.font = font; t.textColor = NSColor.labelColor; t.allowsUndo = true; t.isRichText = false; t.isHorizontallyResizable = false; t.isVerticallyResizable = true; t.textContainer?.widthTracksTextView = true; t.textContainer?.containerSize = NSSize(width: s.contentSize.width, height: CGFloat.greatestFiniteMagnitude); t.textContainerInset = NSSize(width: 0, height: 0); return s
+    }
+    func updateNSView(_ s: NSScrollView, context: Context) { let t = s.documentView as! NSTextView; if t.string != text { t.string = text } }
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: MacTransparentTextView; init(_ p: MacTransparentTextView) { self.parent = p }
+        func textDidChange(_ n: Notification) { guard let t = n.object as? NSTextView else { return }; self.parent.text = t.string }
     }
 }
 
 struct ResizeHandle: View {
-    let controller: DesktopNoteWindowController
-    @State private var initialRect: NSRect? = nil
-    
+    let controller: DesktopNoteWindowController; @State private var initialRect: NSRect? = nil
     var body: some View {
-        Image(systemName: "arrow.up.left.and.arrow.down.right")
-            .font(.system(size: 10))
-            .foregroundColor(.secondary.opacity(0.4))
-            .frame(width: 16, height: 16)
-            .background(Color.white.opacity(0.001))
-            .cursor(.resizeLeftRight)
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        guard let window = controller.window else { return }
-                        if initialRect == nil { initialRect = window.frame }
-                        guard let startRect = initialRect else { return }
-                        
-                        let deltaW = value.translation.width
-                        let deltaH = value.translation.height
-                        
-                        let newWidth = max(200, startRect.width + deltaW)
-                        let newHeight = max(150, startRect.height + deltaH)
-                        
-                        // Maintain Top-Left origin (Cocoa coordinates conversion)
-                        // Cocoa Y grows up. Drag down (+y in swiftui) increases height.
-                        // To keep Top-Left visual anchor, Y origin must decrease by the amount height increased.
-                        let newY = startRect.origin.y - (newHeight - startRect.height)
-                        
-                        let newRect = NSRect(x: startRect.origin.x, y: newY, width: newWidth, height: newHeight)
-                        window.setFrame(newRect, display: true)
-                    }
-                    .onEnded { _ in
-                        initialRect = nil
-                    }
-            )
+        Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.4)).frame(width: 16, height: 16).background(Color.white.opacity(0.001)).cursor(.resizeLeftRight)
+            .gesture(DragGesture(minimumDistance: 0).onChanged { v in
+                guard let w = controller.window else { return }; if initialRect == nil { initialRect = w.frame }
+                guard let s = initialRect else { return }
+                let nw = max(200, s.width + v.translation.width); let nh = max(150, s.height + v.translation.height); let ny = s.origin.y - (nh - s.height)
+                w.setFrame(NSRect(x: s.origin.x, y: ny, width: nw, height: nh), display: true)
+            }.onEnded { _ in initialRect = nil })
     }
 }
 
 extension View {
-    func cursor(_ cursor: NSCursor) -> some View {
-        self.onHover { inside in
-            if inside {
-                cursor.push()
-            } else {
-                NSCursor.pop()
-            }
-        }
-    }
+    func cursor(_ c: NSCursor) -> some View { self.onHover { if $0 { c.push() } else { NSCursor.pop() } } }
 }
