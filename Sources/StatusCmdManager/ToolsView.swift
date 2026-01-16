@@ -64,6 +64,9 @@ struct ToolsView: View {
                                 if tool == .coder {
                                     // Launch Coder Window directly
                                     CoderWindowController.shared.show()
+                                } else if tool == .notebook {
+                                    // Toggle Notebook functionality
+                                    SideNoteWindowController.shared.toggle()
                                 } else {
                                     // Show inline tool detail
                                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
@@ -108,6 +111,7 @@ enum ToolType: String, CaseIterable, Identifiable {
     case md5 = "哈希"
     case encoder = "编解码"
     case coder = "Coder"
+    case notebook = "笔记"
     
     var id: String { rawValue }
     
@@ -120,6 +124,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         case .md5: return "number.circle.fill"
         case .encoder: return "arrow.triangle.2.circlepath"
         case .coder: return "terminal.fill"
+        case .notebook: return "note.text"
         }
     }
     
@@ -132,6 +137,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         case .md5: return .purple
         case .encoder: return .blue
         case .coder: return .black
+        case .notebook: return .indigo
         }
     }
     
@@ -145,6 +151,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         case .md5: return "MD5/SHA"
         case .encoder: return "Base64/URL"
         case .coder: return "脚本运行器"
+        case .notebook: return "侧边速记本"
         }
     }
 }
@@ -292,6 +299,7 @@ struct ToolDetailContainer: View {
                     case .md5: HashCalculatorView()
                     case .encoder: EncoderDecoderView()
                     case .coder: EmptyView() // Should not be reached
+                    case .notebook: EmptyView() // Should not be reached
                     }
                 }
                 .padding(20)

@@ -44,13 +44,24 @@ class SideNoteWindowController: ObservableObject {
             var updated = note
             updated.isDesktopWidget = false
             appViewModel.updateNote(updated)
-            closeDesktopNote(note)
+            closeDesktopNote(note.id)
         } else {
             // Open it
             var updated = note
             updated.isDesktopWidget = true
             appViewModel.updateNote(updated)
             openDesktopNote(updated)
+        }
+    }
+    
+    func toggle() {
+        // Use window.isVisible as an additional source of truth
+        if isVisible || (window?.isVisible ?? false) {
+            hide()
+        } else {
+            if let screen = NSScreen.main {
+                show(on: screen)
+            }
         }
     }
     
@@ -61,10 +72,10 @@ class SideNoteWindowController: ObservableObject {
         }
     }
     
-    func closeDesktopNote(_ note: NoteItem) {
-        if let controller = desktopControllers[note.id] {
+    func closeDesktopNote(_ noteId: UUID) {
+        if let controller = desktopControllers[noteId] {
             controller.closeWindow()
-            desktopControllers.removeValue(forKey: note.id)
+            desktopControllers.removeValue(forKey: noteId)
         }
     }
     
@@ -295,8 +306,9 @@ struct SideNoteView: View {
                                     viewModel.updateNote(updated)
                                 }, onDelete: {
                                     withAnimation {
+                                        // 顺序修复：先关闭对应的桌面窗口，再从数据源删除
+                                        controller.closeDesktopNote(note.id)
                                         viewModel.deleteNote(id: note.id)
-                                        controller.closeDesktopNote(note)
                                     }
                                 }, onDetach: {
                                     DispatchQueue.main.async {

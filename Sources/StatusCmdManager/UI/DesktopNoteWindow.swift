@@ -16,6 +16,7 @@ class DesktopNoteWindowController: NSObject, ObservableObject, NSWindowDelegate 
     var viewModel: AppViewModel
     
     private var saveTimer: Timer?
+    private var isClosing: Bool = false
     
     init(note: NoteItem, viewModel: AppViewModel) {
         var initialNote = note
@@ -55,23 +56,35 @@ class DesktopNoteWindowController: NSObject, ObservableObject, NSWindowDelegate 
     }
     
     func updateNoteData(_ newNote: NoteItem) {
+        guard !isClosing else { return }
         DispatchQueue.main.async {
             self.note = newNote
             self.window.isMovableByWindowBackground = !newNote.isLocked
         }
     }
     
-    func windowDidMove(_ notification: Notification) { updatePosition(save: false); scheduleSave() }
-    func windowDidResize(_ notification: Notification) { updatePosition(save: false); scheduleSave() }
-    func windowDidEndLiveResize(_ notification: Notification) { updatePosition(save: true) }
+    func windowDidMove(_ notification: Notification) { 
+        guard !isClosing else { return }
+        updatePosition(save: false); scheduleSave() 
+    }
+    func windowDidResize(_ notification: Notification) { 
+        guard !isClosing else { return }
+        updatePosition(save: false); scheduleSave() 
+    }
+    func windowDidEndLiveResize(_ notification: Notification) { 
+        guard !isClosing else { return }
+        updatePosition(save: true) 
+    }
     
     func updateContent(_ newContent: String) {
+        guard !isClosing else { return }
         self.note.content = newContent
         viewModel.updateNote(self.note, saveImmediately: false)
         scheduleSave()
     }
     
     func updateStyle(blur: Double, opacity: Double, corner: Double) {
+        guard !isClosing else { return }
         self.note.blurRadius = blur
         self.note.tintOpacity = opacity
         self.note.cornerRadius = corner
@@ -80,26 +93,39 @@ class DesktopNoteWindowController: NSObject, ObservableObject, NSWindowDelegate 
     }
     
     private func updatePosition(save: Bool) {
-        guard let window = window else { return }
+        guard let window = window, !isClosing else { return }
         var updated = self.note
         updated.x = Double(window.frame.origin.x)
         updated.y = Double(window.frame.origin.y)
         updated.width = Double(window.frame.size.width)
         updated.height = Double(window.frame.size.height)
         self.note = updated
-        viewModel.updateNote(updated, saveImmediately: save)
+        
+        // 安全检查：只有笔记还存在于列表中时才更新
+        if viewModel.notes.contains(where: { $0.id == updated.id }) {
+            viewModel.updateNote(updated, saveImmediately: save)
+        }
     }
     
     private func scheduleSave() {
+        guard !isClosing else { return }
         saveTimer?.invalidate()
         saveTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
-            self?.viewModel.saveNotes()
+            guard let self = self, !self.isClosing else { return }
+            // 确保保存前笔记依然存在
+            if self.viewModel.notes.contains(where: { $0.id == self.note.id }) {
+                self.viewModel.saveNotes()
+            }
         }
     }
     
     func closeWindow() {
+        isClosing = true
         saveTimer?.invalidate()
-        window.close()
+        saveTimer = nil
+        window?.delegate = nil
+        window?.close()
+        window = nil
     }
 }
 
