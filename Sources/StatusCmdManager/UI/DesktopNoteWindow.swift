@@ -45,10 +45,13 @@ class DesktopNoteWindowController: NSObject, ObservableObject, NSWindowDelegate 
         // Important: Setting this false allows the custom shape to define the shadow
         window.invalidateShadow()
         
+        // We handle moving manually via background view hit testing if needed, 
+        // but NSWindow.isMovableByWindowBackground = true is the easiest way for "click anywhere to drag".
+        // However, if we want to type, we need to be careful. 
+        // Actually, TextEditor usually captures mouse clicks.
         window.isMovableByWindowBackground = !note.isLocked
         window.delegate = self
         
-        // Ensure we pass self as ObservedObject to View
         let contentView = DesktopNoteView(controller: self, viewModel: viewModel)
         window.contentView = NSHostingView(rootView: contentView)
         window.makeKeyAndOrderFront(nil)
@@ -79,7 +82,6 @@ class DesktopNoteWindowController: NSObject, ObservableObject, NSWindowDelegate 
     
     private func updatePosition(save: Bool) {
         guard let window = window else { return }
-        // Update local state immediately for UI responsiveness
         var updated = self.note
         updated.x = Double(window.frame.origin.x)
         updated.y = Double(window.frame.origin.y)
@@ -87,8 +89,6 @@ class DesktopNoteWindowController: NSObject, ObservableObject, NSWindowDelegate 
         updated.height = Double(window.frame.size.height)
         
         self.note = updated
-        
-        // Update ViewModel (Memory only)
         viewModel.updateNote(updated, saveImmediately: save)
     }
     
@@ -163,63 +163,62 @@ struct DesktopNoteView: View {
             }
             .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 8)
             
-            // MARK: - Content
-            VStack(spacing: 0) {
-                // Toolbar (Header) - Auto hidden
-                ZStack {
-                    if isHovering || isEditing || showColorPicker {
-                        toolbarView
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    } else {
-                        // Invisible draggable area
-                        Color.clear.frame(height: 24)
-                    }
-                }
-                .frame(height: 32)
-                .padding(.top, 4)
-                
-                // Text Area
-                ZStack(alignment: .topLeading) {
-                    if isEditing {
-                        TextEditor(text: $content)
+            // MARK: - Content Layer (Fills Screen)
+            ZStack(alignment: .topLeading) {
+                if isEditing {
+                    // Fully Transparent Editor
+                    MacTransparentTextView(text: $content, font: .systemFont(ofSize: 15, weight: .regular))
+                        .padding(.top, 44) // Avoid Toolbar
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 12)
+                } else {
+                    // Markdown Preview
+                    ScrollView(showsIndicators: false) {
+                        Text(LocalizedStringKey(controller.note.content))
                             .font(.system(size: 15, weight: .regular, design: .rounded))
                             .lineSpacing(4)
-                            .padding(12)
-                            .background(Color.clear)
-                            .foregroundColor(.primary)
-                    } else {
-                        ScrollView(showsIndicators: false) {
-                            Text(LocalizedStringKey(controller.note.content))
-                                .font(.system(size: 15, weight: .regular, design: .rounded))
-                                .lineSpacing(4)
-                                .foregroundColor(.primary.opacity(0.9))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(16)
-                        }
-                        .onTapGesture(count: 2) {
-                            if !controller.note.isLocked {
-                                content = controller.note.content
-                                withAnimation(.spring()) { isEditing = true }
-                            }
+                            .foregroundColor(.primary.opacity(0.9))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 44) // Avoid Toolbar
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 24)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Make entire area clickable to edit (Double tap)
+                    .contentShape(Rectangle()) 
+                    .onTapGesture(count: 2) {
+                        if !controller.note.isLocked {
+                            content = controller.note.content
+                            withAnimation(.spring()) { isEditing = true }
                         }
                     }
                 }
-                .frame(maxHeight: .infinity)
+            }
+            
+            // MARK: - Floating Toolbar (Top Layer)
+            VStack {
+                if isHovering || isEditing || showColorPicker {
+                    toolbarView
+                        .padding(.top, 8)
+                        .padding(.horizontal, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+                Spacer()
                 
-                // Footer (Resize handle & Status)
-                if !controller.note.isLocked {
+                // Resize Handle (Bottom Right)
+                if !controller.note.isLocked && isHovering {
                     HStack {
                         if isEditing {
                             Text("Markdown")
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundColor(.secondary.opacity(0.4))
                                 .padding(.leading, 16)
+                                .padding(.bottom, 8)
                         }
                         Spacer()
                         ResizeHandle(controller: controller)
                             .padding(8)
                     }
-                    .frame(height: 20)
                 }
             }
         }
@@ -264,12 +263,12 @@ struct DesktopNoteView: View {
                             updateColor(newColor)
                             withAnimation { showColorPicker = false }
                         }
-                        .offset(y: 35)
+                        .offset(x: -60, y: 35) // Adjust position to not fly off screen
                         .zIndex(10)
                     }
                 }
                 
-                // Edit
+                // Edit (Save/Done)
                 LiquidToolButton(
                     icon: isEditing ? "checkmark" : "pencil",
                     color: isEditing ? .blue : .secondary,
@@ -288,12 +287,13 @@ struct DesktopNoteView: View {
             .background(
                 Capsule()
                     .fill(Color.white.opacity(0.15))
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .background(VisualEffectBlur(material: .sidebar, blendingMode: .withinWindow, state: .active)) // Frosted glass toolbar
             )
             .overlay(
                 Capsule()
                     .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
             )
+            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
             .padding(.trailing, 8)
         }
     }
@@ -346,6 +346,60 @@ struct DesktopNoteView: View {
 }
 
 // MARK: - Components
+
+// Robust Transparent TextView
+struct MacTransparentTextView: NSViewRepresentable {
+    @Binding var text: String
+    var font: NSFont
+    
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSTextView.scrollableTextView()
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = false // Hidden scroller for clean look, or true if needed
+        scrollView.autohidesScrollers = true
+        
+        let textView = scrollView.documentView as! NSTextView
+        textView.drawsBackground = false
+        textView.backgroundColor = .clear // Crucial
+        textView.delegate = context.coordinator
+        textView.font = font
+        textView.textColor = NSColor.labelColor
+        textView.allowsUndo = true
+        
+        // Layout Config
+        textView.isRichText = false
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+        
+        // Remove default padding/inset issues
+        textView.textContainerInset = NSSize(width: 0, height: 0)
+        
+        return scrollView
+    }
+    
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        let textView = nsView.documentView as! NSTextView
+        if textView.string != text {
+            textView.string = text
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: MacTransparentTextView
+        init(_ parent: MacTransparentTextView) { self.parent = parent }
+        
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            self.parent.text = textView.string
+        }
+    }
+}
 
 struct LiquidToolButton: View {
     let icon: String
@@ -427,6 +481,12 @@ struct VisualEffectBlur: NSViewRepresentable {
         view.material = material
         view.blendingMode = blendingMode
         view.state = state
+        
+        // Fix for rounded corners on backing layer
+        view.wantsLayer = true
+        view.layer?.cornerRadius = 20
+        view.layer?.masksToBounds = true
+        
         return view
     }
 
@@ -462,6 +522,8 @@ struct ResizeHandle: View {
                         let newHeight = max(150, startRect.height + deltaH)
                         
                         // Maintain Top-Left origin (Cocoa coordinates conversion)
+                        // Cocoa Y grows up. Drag down (+y in swiftui) increases height.
+                        // To keep Top-Left visual anchor, Y origin must decrease by the amount height increased.
                         let newY = startRect.origin.y - (newHeight - startRect.height)
                         
                         let newRect = NSRect(x: startRect.origin.x, y: newY, width: newWidth, height: newHeight)
