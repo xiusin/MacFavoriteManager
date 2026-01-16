@@ -364,9 +364,8 @@ struct CodeEditorView: NSViewRepresentable {
             applyRegex(pattern: "'[^']*'", color: .systemOrange, storage: textStorage, string: string)
             
             // 2. Comments: //... or #...
-            applyRegex(pattern: "//.*
-", color: .systemGray, storage: textStorage, string: string)
-            applyRegex(pattern: "#.*\n", color: .systemGray, storage: textStorage, string: string)
+            applyRegex(pattern: "//.*", color: .systemGray, storage: textStorage, string: string)
+            applyRegex(pattern: "#.*", color: .systemGray, storage: textStorage, string: string)
             
             // 3. Keywords
             let keywords = parent.language.keywords.joined(separator: "|")
